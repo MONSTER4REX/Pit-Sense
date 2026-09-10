@@ -17,10 +17,12 @@ def _seconds(value: Any) -> Optional[float]:
 	if value is None:
 		return None
 	if hasattr(value, "total_seconds"):
-		return float(value.total_seconds())
+		seconds = float(value.total_seconds())
+		return None if seconds != seconds else seconds
 	if isinstance(value, float) and value != value:
 		return None
-	return float(value)
+	seconds = float(value)
+	return None if seconds != seconds else seconds
 
 
 def _optional_int(value: Any) -> Optional[int]:
