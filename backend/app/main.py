@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
 
 from app.engine.reoptimizer import optimize_strategy
@@ -47,7 +47,7 @@ async def what_if(request: OptimizeRequest):
 
 
 @app.post("/api/timeline/shock")
-async def inject_shock(event_type: ShockEventType, lap_number: int = Field(ge=1)):
+async def inject_shock(event_type: ShockEventType, lap_number: int = Query(ge=1)):
 	event = timeline.record("shock_event", lap_number, event_type.value)
 	return {"event": event, "status": "queued_for_reoptimization"}
 
