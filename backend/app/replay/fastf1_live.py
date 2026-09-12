@@ -9,6 +9,8 @@ _session_cache = None
 
 def get_fastf1_session():
     global _session_cache
+    if os.getenv("PITSENSE_DISABLE_LIVE_FASTF1") == "1":
+        raise RuntimeError("Live FastF1 enrichment is disabled")
     if _session_cache is None:
         try:
             import fastf1
