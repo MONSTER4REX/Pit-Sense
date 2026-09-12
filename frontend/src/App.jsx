@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import WhatIfPanel from "./components/WhatIfPanel";
 import StrategyTimeline from "./components/StrategyTimeline";
 import ReplayControls from "./components/ReplayControls";
@@ -262,6 +262,15 @@ export default function App() {
 	}[reoptStatus];
 
 	const header = <AppHeader races={races} onRaceChange={handleRaceChange} onReset={handleReset} />;
+	const whatIfRequest = useMemo(() => ({
+		...BASE_CONFIG,
+		end_lap: totalLaps,
+		start_lap: currentLap,
+		current_tyre_age: currentTyreAge,
+		lap_time_seconds: LAP_TIME_SECONDS,
+		uncertainty_events: uncertaintyEvents,
+		rival_cover_stop_probability: 0.0,
+	}), [totalLaps, currentLap, currentTyreAge, uncertaintyEvents]);
 
 	if (loadError && !recommendation) {
 		return (
@@ -314,17 +323,7 @@ export default function App() {
 					onAccept={handleDecision}
 				/>
 				<TrackVisualization metadata={raceMetadata} currentLap={currentLap} replayMode={replayMode} />
-				<WhatIfPanel
-					request={{
-						...BASE_CONFIG,
-					end_lap: totalLaps,
-					start_lap: currentLap,
-						current_tyre_age: currentTyreAge,
-						lap_time_seconds: LAP_TIME_SECONDS,
-						uncertainty_events: uncertaintyEvents,
-						rival_cover_stop_probability: 0.0,
-					}}
-				/>
+				<WhatIfPanel request={whatIfRequest} />
 				<ReplayControls
 					key={replayInstanceKey}
 					lapTimes={LAP_TIME_SECONDS}

@@ -65,6 +65,14 @@ button { font: inherit; }
 .shock-event-button:hover:not(:disabled) { background: rgba(228, 168, 79, .15); }
 .shock-event-button:disabled { cursor: wait; opacity: .55; }
 .shock-console-status { color: #c59af2; font: 11px 'DM Mono', monospace; }
+.whatif-table { margin-top: 18px; border: 1px solid #35434d; }
+.whatif-table-row { display: grid; grid-template-columns: 1.1fr 1fr 1.3fr; gap: 14px; align-items: center; padding: 14px 16px; border-top: 1px solid #29353d; color: #c5d0d6; font: 12px 'DM Mono', monospace; }
+.whatif-table-row:first-child { border-top: 0; }
+.whatif-table-head { color: #91a1ad; background: rgba(19, 27, 34, .9); font-size: 10px; letter-spacing: .08em; }
+.whatif-table-row strong { color: #e4a84f; font-weight: 500; }
+.whatif-table-row span { color: #f2f5f7; }
+.whatif-table-row .insufficient-data { color: #71828e; }
+.whatif-table-row em { color: #71828e; font-size: 10px; font-style: normal; }
 .decision-comparison { grid-column: 1 / -1; border-style: dashed; border-color: #8d6bac; background: rgba(31, 24, 41, .72); }
 .decision-comparison h2 { margin-bottom: 8px; }
 .comparison-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 20px; }
@@ -150,4 +158,4 @@ h2 { font-size: 1.5rem; margin: 0 0 24px; }
 .replay-readout { display: flex; justify-content: space-between; margin-top: 10px; font: 12px 'DM Mono', monospace; color: #92a1ac; }
 
 @media (max-width: 980px) { .decision-layout { grid-template-columns: 1fr 1fr; }.decision-layout .primary-decision { grid-column: 1 / -1; grid-row: 1; }.decision-layout .pitsense-panel { grid-column: 1; grid-row: 2; }.decision-layout .baseline-panel { grid-column: 2; grid-row: 2; } }
-@media (max-width: 760px) { .app-header { grid-template-columns: 1fr; }.app-header-controls { justify-content: flex-start; }.car-panels-grid, .risk-meters, .track-layout, .decision-layout, .comparison-columns { grid-template-columns: 1fr; }.decision-layout .primary-decision, .decision-layout .pitsense-panel, .decision-layout .baseline-panel { grid-column: 1; grid-row: auto; }.gap-readout { border-left: 0; border-top: 1px solid #35434d; padding: 16px 0 0; }.topbar, .status-strip, .confidence, .footer-line { align-items: flex-start; flex-direction: column; }.workspace-grid { grid-template-columns: 1fr; }.map-panel { grid-column: auto; }.mode-badge { align-self: flex-start; }.whatif-grid { grid-template-columns: 1fr; } }
+@media (max-width: 760px) { .app-header { grid-template-columns: 1fr; }.app-header-controls { justify-content: flex-start; }.car-panels-grid, .risk-meters, .track-layout, .decision-layout, .comparison-columns, .whatif-table-row { grid-template-columns: 1fr; }.decision-layout .primary-decision, .decision-layout .pitsense-panel, .decision-layout .baseline-panel { grid-column: 1; grid-row: auto; }.gap-readout { border-left: 0; border-top: 1px solid #35434d; padding: 16px 0 0; }.topbar, .status-strip, .confidence, .footer-line { align-items: flex-start; flex-direction: column; }.workspace-grid { grid-template-columns: 1fr; }.map-panel { grid-column: auto; }.mode-badge { align-self: flex-start; }.whatif-grid { grid-template-columns: 1fr; } }
