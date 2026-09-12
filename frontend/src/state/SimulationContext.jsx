@@ -18,6 +18,7 @@ const INITIAL_REPLAY_STATE = {
 	shockLap: null,
 	shockReference: null,
 	shockDecisions: [],
+	projectedTicks: [],
 };
 
 const SimulationContext = createContext(null);
@@ -77,6 +78,13 @@ export function SimulationProvider({ children }) {
 		}));
 	}, []);
 
+	const recordProjectedTick = useCallback((tick) => {
+		setState((current) => ({
+			...current,
+			projectedTicks: [...current.projectedTicks.filter((item) => item.lap !== tick.lap), tick].sort((a, b) => a.lap - b.lap),
+		}));
+	}, []);
+
 	const value = useMemo(
 		() => ({
 			...state,
@@ -87,8 +95,9 @@ export function SimulationProvider({ children }) {
 			setSpeed,
 			acceptCounterfactual,
 			recordShockEvent,
+			recordProjectedTick,
 		}),
-		[state, resetSimulation, selectRace, setRaceMetadata, setCurrentLap, setSpeed, acceptCounterfactual, recordShockEvent],
+		[state, resetSimulation, selectRace, setRaceMetadata, setCurrentLap, setSpeed, acceptCounterfactual, recordShockEvent, recordProjectedTick],
 	);
 
 	return <SimulationContext.Provider value={value}>{children}</SimulationContext.Provider>;

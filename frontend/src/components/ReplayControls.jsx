@@ -2,12 +2,14 @@ import { useTickStream } from "../hooks/useTickStream";
 
 const SPEEDS = [1, 2, 5];
 
-export default function ReplayControls({ lapTimes, startLap, startTyreAge = 12, onTick }) {
+export default function ReplayControls({ lapTimes, startLap, startTyreAge = 12, onTick, simulation = false, onSimulationTick }) {
 	const { isPlaying, speed, currentTick, error, complete, play, pause, scrubToLap, changeSpeed } = useTickStream({
 		lapTimes,
 		startLap,
 		startTyreAge,
 		onTick,
+		simulation,
+		onSimulationTick,
 	});
 	const endLap = startLap + lapTimes.length - 1;
 	const scrubValue = currentTick?.lapNumber ?? startLap;

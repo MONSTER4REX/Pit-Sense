@@ -8,7 +8,10 @@ import RaceCarPanels from "./components/RaceCarPanels";
 import TrackVisualization from "./components/TrackVisualization";
 import ShockEventConsole from "./components/ShockEventConsole";
 import DecisionComparison from "./components/DecisionComparison";
-import { fetchAvailableRaces, fetchRecommendation, fetchTimeline, injectShockEvent, loadRaceSession } from "./api";
+import CounterfactualSimulation from "./components/CounterfactualSimulation";
+import ForkTransition from "./components/ForkTransition";
+import DualLayerTimeline from "./components/DualLayerTimeline";
+import { acceptSimulationDecision, fetchAvailableRaces, fetchRecommendation, fetchTimeline, injectShockEvent, loadRaceSession } from "./api";
 import { useSimulation } from "./state/SimulationContext";
 
 const LAP_TIME_SECONDS = Array.from({ length: 30 }, (_, index) => 92.4 + Math.sin(index / 3) * 1.6);
@@ -34,11 +37,15 @@ export default function App() {
 		setCurrentLap,
 		resetSimulation,
 		replayMode,
+		forkLap,
+		acceptedAction,
 		acceptCounterfactual,
 		shockEvent,
 		shockLap,
 		shockDecisions,
 		recordShockEvent,
+		recordProjectedTick,
+		projectedTicks,
 	} = useSimulation();
 	const [races, setRaces] = useState([]);
 	const [raceLoading, setRaceLoading] = useState(true);
@@ -196,10 +203,22 @@ export default function App() {
 			});
 	}, [currentTyreAgeRef, setCurrentLap, totalLaps, uncertaintyEvents]);
 
-	const handleDecision = useCallback((action) => {
-		acceptCounterfactual(currentLap, action);
-		console.info(`[PitSense] Counterfactual transition accepted at Lap ${currentLap}: ${action}`);
-	}, [acceptCounterfactual, currentLap]);
+	const handleDecision = useCallback(async (action) => {
+		try {
+			const response = await acceptSimulationDecision(action, currentLap);
+			if (!response.tick) throw new Error("Simulation decision returned no projected tick");
+			recordProjectedTick(response.tick);
+			acceptCounterfactual(currentLap, action);
+			console.info(`[PitSense] Counterfactual transition accepted at Lap ${currentLap}: ${action}`);
+		} catch (err) {
+			setReoptError(`Counterfactual fork failed: ${err.message}`);
+		}
+	}, [acceptCounterfactual, currentLap, recordProjectedTick]);
+
+	const handleSimulationTick = useCallback((tick) => {
+		recordProjectedTick(tick);
+		setCurrentLap(tick.lap);
+	}, [recordProjectedTick, setCurrentLap]);
 
 	const triggerShockEvent = async (requestedEventType) => {
 		if (reoptStatus === "recomputing") return; // one re-optimization in flight at a time
@@ -302,6 +321,8 @@ export default function App() {
 				<span className={`status-${reoptStatus}`}>{statusLabel}</span>
 			</section>
 			{reoptError && <p className="error-note">Re-optimization error: {reoptError}</p>}
+			{replayMode === "counterfactual" && <ForkTransition forkLap={forkLap} action={acceptedAction} />}
+			{replayMode === "counterfactual" && <CounterfactualSimulation forkLap={forkLap} currentLap={currentLap} projectedTicks={projectedTicks} />}
 			<section className="decision-layout">
 				<RaceCarPanels
 					metadata={raceMetadata}
@@ -325,13 +346,16 @@ export default function App() {
 				<TrackVisualization metadata={raceMetadata} currentLap={currentLap} replayMode={replayMode} />
 				<WhatIfPanel request={whatIfRequest} />
 				<ReplayControls
-					key={replayInstanceKey}
+					key={`${replayInstanceKey}-${replayMode}-${forkLap ?? 0}`}
 					lapTimes={LAP_TIME_SECONDS}
-					startLap={1}
+					startLap={replayMode === "counterfactual" ? forkLap : 1}
 					startTyreAge={0}
 					onTick={handleTick}
+					simulation={replayMode === "counterfactual"}
+					onSimulationTick={handleSimulationTick}
 				/>
 				<StrategyTimeline events={timelineEvents} loading={timelineLoading} error={timelineError} currentLap={currentLap} />
+				{replayMode === "counterfactual" && <DualLayerTimeline forkLap={forkLap} currentLap={currentLap} totalLaps={totalLaps} />}
 			</section>
 			<footer className="footer-line"><span>Replay data: FastF1 cache</span><span>Data quality: 2 flagged gaps</span><span>Shock response target: &lt; 1.0s</span></footer>
 		</main>
