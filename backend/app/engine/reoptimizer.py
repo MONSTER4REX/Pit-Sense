@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from app.confidence.risk_tier import score_undercut_risk_tier
 from app.confidence.scorer import score_confidence
 from app.engine.dijkstra import shortest_path
 from app.engine.graph_builder import build_strategy_graph
@@ -29,10 +30,15 @@ def optimize_strategy(
     pit_edge = next((edge for edge in path if edge.action == "pit_now"), None)
     action = "pit_now" if pit_edge else "stay_out"
     pit_lap = pit_edge.source.lap if pit_edge else end_lap
+    confidence = score_confidence(uncertainty_events=uncertainty_events)
     return StrategyRecommendation(
         action=action,
         pit_lap=pit_lap,
         projected_total_time_seconds=total,
+        undercut_risk_tier=score_undercut_risk_tier(
+            rival_cover_stop_probability=rival_cover_stop_probability,
+            confidence=confidence,
+        ),
         explainability=explain_path(path, rival_cover_stop_probability),
-        confidence=score_confidence(uncertainty_events=uncertainty_events),
+        confidence=confidence,
     )

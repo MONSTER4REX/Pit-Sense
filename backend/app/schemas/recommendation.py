@@ -28,5 +28,6 @@ class StrategyRecommendation(BaseModel):
     action: Literal["pit_now", "stay_out", "extend_stint"]
     pit_lap: int = Field(ge=1)
     projected_total_time_seconds: float = Field(gt=0)
+    undercut_risk_tier: Literal["safe", "marginal", "optimal", "critical"] = "safe"
     explainability: ExplainabilityBreakdown
     confidence: ConfidenceBand
