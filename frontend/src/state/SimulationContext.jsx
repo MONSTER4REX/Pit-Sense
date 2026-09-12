@@ -14,6 +14,10 @@ const INITIAL_REPLAY_STATE = {
 	speed: 1,
 	selectedRace: null,
 	raceMetadata: null,
+	shockEvent: null,
+	shockLap: null,
+	shockReference: null,
+	shockDecisions: [],
 };
 
 const SimulationContext = createContext(null);
@@ -63,6 +67,16 @@ export function SimulationProvider({ children }) {
 		}));
 	}, []);
 
+	const recordShockEvent = useCallback((eventType, lap, reference, decisions) => {
+		setState((current) => ({
+			...current,
+			shockEvent: eventType,
+			shockLap: lap,
+			shockReference: reference,
+			shockDecisions: decisions,
+		}));
+	}, []);
+
 	const value = useMemo(
 		() => ({
 			...state,
@@ -72,8 +86,9 @@ export function SimulationProvider({ children }) {
 			setCurrentLap,
 			setSpeed,
 			acceptCounterfactual,
+			recordShockEvent,
 		}),
-		[state, resetSimulation, selectRace, setRaceMetadata, setCurrentLap, setSpeed, acceptCounterfactual],
+		[state, resetSimulation, selectRace, setRaceMetadata, setCurrentLap, setSpeed, acceptCounterfactual, recordShockEvent],
 	);
 
 	return <SimulationContext.Provider value={value}>{children}</SimulationContext.Provider>;

@@ -6,6 +6,8 @@ import AppHeader from "./components/AppHeader";
 import PrimaryDecision from "./components/PrimaryDecision";
 import RaceCarPanels from "./components/RaceCarPanels";
 import TrackVisualization from "./components/TrackVisualization";
+import ShockEventConsole from "./components/ShockEventConsole";
+import DecisionComparison from "./components/DecisionComparison";
 import { fetchAvailableRaces, fetchRecommendation, fetchTimeline, injectShockEvent, loadRaceSession } from "./api";
 import { useSimulation } from "./state/SimulationContext";
 
@@ -33,6 +35,10 @@ export default function App() {
 		resetSimulation,
 		replayMode,
 		acceptCounterfactual,
+		shockEvent,
+		shockLap,
+		shockDecisions,
+		recordShockEvent,
 	} = useSimulation();
 	const [races, setRaces] = useState([]);
 	const [raceLoading, setRaceLoading] = useState(true);
@@ -195,9 +201,9 @@ export default function App() {
 		console.info(`[PitSense] Counterfactual transition accepted at Lap ${currentLap}: ${action}`);
 	}, [acceptCounterfactual, currentLap]);
 
-	const triggerShockEvent = async () => {
+	const triggerShockEvent = async (requestedEventType) => {
 		if (reoptStatus === "recomputing") return; // one re-optimization in flight at a time
-		const eventType = SHOCK_CYCLE[shockIndexRef.current % SHOCK_CYCLE.length];
+		const eventType = requestedEventType || SHOCK_CYCLE[shockIndexRef.current % SHOCK_CYCLE.length];
 		shockIndexRef.current += 1;
 		setReoptStatus("recomputing");
 		setReoptError(null);
@@ -208,12 +214,12 @@ export default function App() {
 
 		try {
 			const exactLap = currentLapRef.current;
-			await injectShockEvent(eventType, exactLap);
+			const shockResponse = await injectShockEvent(eventType, exactLap);
 			await refreshTimeline();
 
 			const nextEvents = uncertaintyEvents.includes(eventType) ? uncertaintyEvents : [...uncertaintyEvents, eventType];
-			const nextLap = exactLap + 1;
-			const nextTyreAge = currentTyreAgeRef.current + 1;
+			const nextLap = exactLap;
+			const nextTyreAge = currentTyreAgeRef.current;
 			const fresh = await fetchRecommendation({
 				...BASE_CONFIG,
 				end_lap: totalLaps,
@@ -227,6 +233,12 @@ export default function App() {
 			window.clearTimeout(budgetTimer);
 			setRecommendation(fresh);
 			setUncertaintyEvents(nextEvents);
+			recordShockEvent(
+				eventType,
+				exactLap,
+				{ lap: exactLap, tyreAge: currentTyreAgeRef.current, mode: "HISTORICAL" },
+				shockResponse.tick?.decisions ?? [],
+			);
 			currentLapRef.current = nextLap;
 			currentTyreAgeRef.current = nextTyreAge;
 			setCurrentLap(nextLap);
@@ -293,13 +305,14 @@ export default function App() {
 				{recommendation && <PrimaryDecision recommendation={recommendation} currentLap={currentLap} replayMode={replayMode} isUpdating={recommendationPending} onAction={handleDecision} />}
 			</section>
 			<section className="workspace-grid" id="comparison">
-				<article className="panel recommendation-panel">
-					<div className="panel-label">REPLAY ACTIONS</div>
-					<button className="shock-button" onClick={triggerShockEvent} disabled={reoptStatus === "recomputing"}>
-						Inject Shock Event
-					</button>
-					<p className="mt-3 text-[11px] font-mono leading-relaxed text-[#71828e]">Triggering a shock event recalculates strategy and widens the confidence band.</p>
-				</article>
+				<ShockEventConsole currentLap={currentLap} isRecomputing={reoptStatus === "recomputing"} activeEvent={shockEvent} onShock={triggerShockEvent} />
+				<DecisionComparison
+					eventType={shockEvent}
+					lap={shockLap}
+					recommendation={recommendation}
+					baselineDecision={shockDecisions.find((decision) => decision.car === "P1")}
+					onAccept={handleDecision}
+				/>
 				<TrackVisualization metadata={raceMetadata} currentLap={currentLap} replayMode={replayMode} />
 				<WhatIfPanel
 					request={{
