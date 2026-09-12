@@ -50,6 +50,24 @@ button { font: inherit; }
 .decision-action { border: 1px solid #50606c; background: transparent; color: #c5d0d6; padding: 10px 14px; cursor: pointer; font: 500 11px 'DM Mono', monospace; letter-spacing: .06em; }
 .decision-action:hover, .decision-action-primary { border-color: #e4a84f; color: #e4a84f; background: rgba(228, 168, 79, .08); }
 .comparison-link { display: inline-block; margin-top: 23px; color: #91a1ad; font: 11px 'DM Mono', monospace; text-decoration: none; }
+.track-panel { grid-column: 1 / -1; }
+.track-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 18px; }
+.track-heading h2 { margin-bottom: 5px; }
+.track-note { color: #71828e; font: 11px 'DM Mono', monospace; margin: 0; }
+.track-layout { display: grid; grid-template-columns: minmax(0, 1fr) 230px; gap: 24px; align-items: center; margin-top: 22px; }
+.stylized-track { position: relative; height: 190px; overflow: hidden; border: 1px solid #2a353e; background: #10181e; }
+.racing-line { position: absolute; left: 7%; right: 7%; top: 54px; height: 72px; border: 5px solid #526671; border-radius: 48% 18% 42% 24%; transform: rotate(-4deg); }
+.pit-lane-line { position: absolute; left: 17%; right: 24%; top: 135px; height: 28px; border-top: 3px dashed #788b95; transform: rotate(-4deg); }
+.pit-lane-line span { position: absolute; right: 0; top: 5px; color: #71828e; font: 10px 'DM Mono', monospace; letter-spacing: .08em; }
+.track-marker { position: absolute; top: 83px; width: 30px; height: 30px; border: 2px solid; border-radius: 50%; transform: translateX(-50%); display: grid; place-items: center; font: 10px 'DM Mono', monospace; z-index: 1; }
+.p1-marker { color: #e4a84f; border-color: #e4a84f; background: #182329; }
+.p2-marker { color: #7bd4a5; border-color: #7bd4a5; background: #182329; }
+.track-unavailable { position: absolute; inset: 0; display: grid; place-items: center; padding: 30px; color: #aab8c2; text-align: center; font: 11px/1.6 'DM Mono', monospace; }
+.gap-readout { border-left: 1px solid #35434d; padding-left: 20px; }
+.gap-readout strong { display: block; color: #f2f5f7; font: 600 2.5rem 'DM Mono', monospace; margin: 7px 0; }
+.gap-readout > span { color: #e4a84f; font: 11px 'DM Mono', monospace; }
+.pit-status-list { margin-top: 25px; display: grid; gap: 10px; }
+.pit-status-list > div { display: flex; justify-content: space-between; align-items: center; gap: 8px; color: #aab8c2; font: 10px 'DM Mono', monospace; }
 .topbar, .status-strip, .factor-head, .confidence, .footer-line, .map-legend { display: flex; align-items: center; justify-content: space-between; gap: 18px; }
 .eyebrow, .panel-label, .mode-badge, .status-strip, .footer-line, .map-legend { font: 500 11px 'DM Mono', monospace; letter-spacing: .08em; text-transform: uppercase; }
 h1 { max-width: 620px; margin: 10px 0 34px; font-size: clamp(2rem, 5vw, 4.7rem); line-height: .96; letter-spacing: -.06em; }
@@ -107,4 +125,4 @@ h2 { font-size: 1.5rem; margin: 0 0 24px; }
 .replay-scrub { width: 100%; margin-top: 16px; }
 .replay-readout { display: flex; justify-content: space-between; margin-top: 10px; font: 12px 'DM Mono', monospace; color: #92a1ac; }
 
-@media (max-width: 760px) { .app-header { grid-template-columns: 1fr; }.app-header-controls { justify-content: flex-start; }.car-panels-grid, .risk-meters { grid-template-columns: 1fr; }.topbar, .status-strip, .confidence, .footer-line { align-items: flex-start; flex-direction: column; }.workspace-grid { grid-template-columns: 1fr; }.map-panel { grid-column: auto; }.mode-badge { align-self: flex-start; }.whatif-grid { grid-template-columns: 1fr; } }
+@media (max-width: 760px) { .app-header { grid-template-columns: 1fr; }.app-header-controls { justify-content: flex-start; }.car-panels-grid, .risk-meters, .track-layout { grid-template-columns: 1fr; }.gap-readout { border-left: 0; border-top: 1px solid #35434d; padding: 16px 0 0; }.topbar, .status-strip, .confidence, .footer-line { align-items: flex-start; flex-direction: column; }.workspace-grid { grid-template-columns: 1fr; }.map-panel { grid-column: auto; }.mode-badge { align-self: flex-start; }.whatif-grid { grid-template-columns: 1fr; } }

@@ -79,6 +79,10 @@ async def race_session(year: int, event_name: str) -> dict[str, object]:
 		"total_laps": active_simulation.end_lap,
 		"p1_laps": len(session.p1.laps),
 		"p2_laps": len(session.p2.laps),
+		"p1_lap_states": [lap.model_dump(mode="json") for lap in session.p1.laps],
+		"p2_lap_states": [lap.model_dump(mode="json") for lap in session.p2.laps],
+		"p1_pit_stops": [stop.model_dump(mode="json") for stop in session.p1.pit_stops],
+		"p2_pit_stops": [stop.model_dump(mode="json") for stop in session.p2.pit_stops],
 		"historical_events": active_historical_events,
 	}
 

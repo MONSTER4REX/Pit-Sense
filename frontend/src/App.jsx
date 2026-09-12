@@ -6,6 +6,7 @@ import ReplayControls from "./components/ReplayControls";
 import AppHeader from "./components/AppHeader";
 import PrimaryDecision from "./components/PrimaryDecision";
 import RaceCarPanels from "./components/RaceCarPanels";
+import TrackVisualization from "./components/TrackVisualization";
 import { fetchAvailableRaces, fetchRecommendation, fetchTimeline, injectShockEvent, loadRaceSession } from "./api";
 import { useSimulation } from "./state/SimulationContext";
 
@@ -308,32 +309,7 @@ export default function App() {
 					{recommendationPending ? <p className="data-note">Recalculating from the current replay tick…</p> : <ExplainabilityChart explainability={recommendation.explainability} />}
 					<p className="data-note">Factors are calculated from the loaded historical session. Missing source fields are flagged, never interpolated.</p>
 				</article>
-				<article className="panel map-panel">
-					<div className="panel-label">TRACK POSITION</div>
-					<div className="relative mt-8 mb-6 h-1 w-full bg-slate-700 rounded">
-						<div className="absolute top-[-26px] left-[43.5%] translate-x-[-50%] text-[11px] font-mono text-slate-300">
-							Projected Rejoin Gap: +{(recommendation.explainability.traffic_rejoin_risk > 0 ? recommendation.explainability.traffic_rejoin_risk * 10 : 2.1).toFixed(1)}s
-						</div>
-						<span 
-							className="absolute w-3 h-3 rounded-full bg-orange-400 shadow-[0_0_12px_#fb923c]" 
-							style={{ left: "29%", top: "50%", transform: "translate(-50%, -50%)" }} 
-						/>
-						<span
-							className="absolute w-3 h-3 rounded-full bg-red-400 transition-all"
-							style={{
-								left: "58%", 
-								top: "50%", 
-								transform: "translate(-50%, -50%)",
-								opacity: (recommendation.explainability.traffic_rejoin_risk) > 0 ? 0.95 : 0.3,
-								boxShadow: (recommendation.explainability.traffic_rejoin_risk) > 0 ? "0 0 12px #f87171" : "none",
-							}}
-						/>
-					</div>
-					<div className="map-legend mt-6">
-						<span><i className="marker car" /> YOUR CAR</span>
-						<span><i className="marker traffic" /> TRAFFIC RISK</span>
-					</div>
-				</article>
+				<TrackVisualization metadata={raceMetadata} currentLap={currentLap} replayMode={replayMode} />
 				<WhatIfPanel
 					request={{
 						...BASE_CONFIG,
