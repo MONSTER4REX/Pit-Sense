@@ -7,7 +7,7 @@ from app.engine.baseline import baseline_decision
 from app.engine.reoptimizer import optimize_strategy
 from app.replay.shock_events import ShockEventType
 from app.schemas.race_state import RaceState
-from app.schemas.simulation import CarSimulationState, CounterfactualSummary, SimulationTick, StrategyDecision
+from app.schemas.simulation import CarSimulationState, CounterfactualSummary, DecisionRecord, SimulationTick, StrategyDecision
 
 
 @dataclass
@@ -22,6 +22,8 @@ class SimulationEngine:
 		self.shock_lap: int | None = None
 		self.fork_lap: int | None = None
 		self.user_action: str | None = None
+		self.next_review_lap: int | None = None
+		self.decision_history: list[DecisionRecord] = []
 
 	@property
 	def end_lap(self) -> int:
@@ -85,6 +87,8 @@ class SimulationEngine:
 			shock_event=self.shock_event.value if self.shock_event else None,
 			cars=[p1, p2],
 			decisions=decisions,
+			decision_lap=self.shock_lap,
+			next_review_lap=None,
 		)
 
 	def inject_shock(self, lap: int, event_type: ShockEventType) -> SimulationTick:
@@ -100,6 +104,8 @@ class SimulationEngine:
 			raise ValueError("Action must be PIT, STAY_OUT, or EXTEND")
 		self.fork_lap = lap
 		self.user_action = action
+		self.next_review_lap = min(self.end_lap, lap + (3 if action == "EXTEND" else 2))
+		self.decision_history.append(DecisionRecord(lap=lap, action=action))
 		if self.scenario_id == "historical":
 			self.scenario_id = f"decision-{uuid4().hex[:8]}"
 		return self.projected_tick(lap)
@@ -114,8 +120,15 @@ class SimulationEngine:
 		p2.tyre_age = age_since_fork + 8
 		baseline = baseline_decision(car=p1, end_lap=self.end_lap, shock_event=self.shock_event.value if self.shock_event else None, pit_lane_loss_seconds=self.pit_lane_loss_seconds)
 		pitsense = self._pitsense_decision(p2, lap)
-		if lap == self.fork_lap and self.user_action:
-			pitsense = pitsense.model_copy(update={"action": self.user_action, "target_lap": lap, "explanation": f"User selected {self.user_action} at the simulation fork."})
+		if self.user_action and self.next_review_lap and lap < self.next_review_lap:
+			pitsense = pitsense.model_copy(update={
+				"action": self.user_action,
+				"target_lap": self.next_review_lap,
+				"explanation": f"User selected {self.user_action}; next strategic review is Lap {self.next_review_lap}.",
+			})
+		elif self.next_review_lap and lap >= self.next_review_lap:
+			self.user_action = pitsense.action
+			self.next_review_lap = min(self.end_lap, lap + 2) if lap < self.end_lap else None
 		p1.mode = "PROJECTED"
 		p2.mode = "PROJECTED"
 		if baseline.action == "PIT":
@@ -138,6 +151,8 @@ class SimulationEngine:
 			shock_event=self.shock_event.value if self.shock_event else None,
 			cars=[p1, p2],
 			decisions=[baseline, pitsense],
+			decision_lap=self.fork_lap,
+			next_review_lap=self.next_review_lap,
 		)
 
 	def summary(self) -> CounterfactualSummary:
@@ -156,6 +171,7 @@ class SimulationEngine:
 			projected_finishing_gap_seconds=projected_gap,
 			projected_advantage_seconds=historical_gap - projected_gap,
 			projected_gain_loss_vs_historical=historical["P2"] - p2.position,
+			decision_history=self.decision_history,
 			assumptions=[
 				f"Pit-lane loss approximated as {self.pit_lane_loss_seconds:.1f}s.",
 				"Projected lap times use the historical lap time plus a deterministic tyre-age adjustment.",

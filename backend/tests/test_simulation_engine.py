@@ -48,3 +48,17 @@ def test_accepting_action_creates_projected_fork_and_summary() -> None:
 	assert next(decision for decision in projected.decisions if decision.car == "P2").action == "PIT"
 	assert summary.historical_vs_projected == "COUNTERFACTUAL_PROJECTION"
 	assert summary.assumptions
+
+
+def test_counterfactual_reoptimizes_at_next_review_lap() -> None:
+	engine = SimulationEngine(_race("P1DRV", 1, 0.0), _race("P2DRV", 2, 4.0))
+	engine.inject_shock(2, ShockEventType.SAFETY_CAR)
+	first = engine.accept_decision(2, "STAY_OUT")
+	review = engine.tick(4)
+	second = engine.accept_decision(4, "PIT")
+
+	assert first.next_review_lap == 4
+	assert review.mode == "PROJECTED"
+	assert review.next_review_lap is not None
+	assert [record.lap for record in engine.decision_history] == [2, 4]
+	assert second.decision_lap == 4

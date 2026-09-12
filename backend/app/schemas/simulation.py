@@ -52,6 +52,17 @@ class SimulationTick(BaseModel):
 	shock_event: str | None = None
 	cars: list[CarSimulationState] = Field(min_length=2)
 	decisions: list[StrategyDecision] = Field(default_factory=list)
+	decision_lap: int | None = Field(default=None, ge=1)
+	next_review_lap: int | None = Field(default=None, ge=1)
+
+
+class DecisionRecord(BaseModel):
+	model_config = ConfigDict(extra="forbid")
+
+	lap: int = Field(ge=1)
+	action: SimulationAction
+	model_type: Literal["USER_DECISION"] = "USER_DECISION"
+	mode: Literal["PROJECTED"] = "PROJECTED"
 
 
 class CounterfactualSummary(BaseModel):
@@ -63,5 +74,6 @@ class CounterfactualSummary(BaseModel):
 	projected_finishing_gap_seconds: float = Field(ge=0)
 	projected_advantage_seconds: float | None = None
 	projected_gain_loss_vs_historical: int
+	decision_history: list[DecisionRecord] = Field(default_factory=list)
 	assumptions: list[str] = Field(min_length=1)
 	historical_vs_projected: Literal["COUNTERFACTUAL_PROJECTION"] = "COUNTERFACTUAL_PROJECTION"
