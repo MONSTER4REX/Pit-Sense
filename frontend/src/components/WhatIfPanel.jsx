@@ -1,15 +1,12 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
+import ExplainabilityChart from "./ExplainabilityChart";
+import UndercutRiskTier from "./UndercutRiskTier";
 import { fetchWhatIf } from "../api";
 
 const BRANCH_LABEL = { pit_now: "PIT NOW", stay_out: "STAY OUT", extend_stint: "EXTEND" };
+const SECONDS_PER_POSITION = 3.0;
 
-function formatTimeEffect(seconds) {
-	if (seconds == null || !Number.isFinite(seconds)) return "—";
-	if (Math.abs(seconds) < 0.05) return "BEST";
-	return `${seconds > 0 ? "+" : ""}${seconds.toFixed(1)}s`;
-}
-
-export default function WhatIfPanel({ request }) {
+export default function WhatIfPanel({ request, currentPosition = 4 }) {
 	const [branches, setBranches] = useState(null);
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState(null);
@@ -19,10 +16,8 @@ export default function WhatIfPanel({ request }) {
 		const runComparison = async () => {
 			setLoading(true);
 			setError(null);
-			setBranches(null);
 			try {
-				const data = await fetchWhatIf(request, controller.signal);
-				setBranches(data);
+				setBranches(await fetchWhatIf(request, controller.signal));
 			} catch (err) {
 				if (err.name !== "AbortError") setError(err.message);
 			} finally {
@@ -34,26 +29,28 @@ export default function WhatIfPanel({ request }) {
 	}, [request]);
 
 	const entries = branches ? Object.entries(branches) : [];
-	const pitNow = branches?.pit_now?.projected_total_time_seconds;
+	const bestTime = entries.length ? Math.min(...entries.map(([, branch]) => branch.projected_total_time_seconds)) : 0;
 
 	return (
 		<article className="panel whatif-panel">
 			<div className="panel-label">WHAT-IF SIMULATOR</div>
-			<h2>WHAT-IF — CURRENT STATE: LAP {request.start_lap}</h2>
-			<p className="data-note">Each branch is recalculated from the current lap, tyre age, and active shock-event state.</p>
-			{loading && <p className="data-note">Running current-state projections…</p>}
+			<h2>Branch comparison</h2>
+			{loading && !branches && <p className="data-note">Running what-if simulations...</p>}
 			{error && <p className="error-note">What-if comparison failed: {error}</p>}
 			{entries.length > 0 && (
-				<div className="whatif-table">
-					<div className="whatif-table-row whatif-table-head">
-						<span>ACTION</span><span>TIME EFFECT</span><span>PROJECTED POSITION</span>
-					</div>
+				<div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-5">
 					{entries.map(([key, branch]) => {
+						const delta = branch.projected_total_time_seconds - bestTime;
+						const position = Math.min(20, Math.max(1, Math.round(currentPosition + delta / SECONDS_PER_POSITION)));
 						return (
-							<div className="whatif-table-row" key={key}>
-								<strong>{BRANCH_LABEL[key] ?? key.toUpperCase()}</strong>
-								<span>{formatTimeEffect(branch.projected_total_time_seconds - pitNow)}</span>
-								<span className="insufficient-data">— <em>insufficient position model</em></span>
+							<div className="whatif-branch" key={key}>
+								<div className="whatif-branch-head">
+									<span>{BRANCH_LABEL[key] ?? key.toUpperCase()}</span>
+									<UndercutRiskTier tier={branch.undercut_risk_tier} />
+								</div>
+								<div className="whatif-metric"><span>Projected time delta</span><strong>{delta === 0 ? "BEST" : `+${delta.toFixed(1)}s`}</strong></div>
+								<div className="whatif-metric"><span>Projected finishing position <em className="estimate-flag" title="Estimated from backend time delta; the backend does not model grid order">(estimated)</em></span><strong>P{position}</strong></div>
+								<ExplainabilityChart explainability={branch.explainability} />
 							</div>
 						);
 					})}
