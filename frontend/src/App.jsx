@@ -14,6 +14,7 @@ import DualLayerTimeline from "./components/DualLayerTimeline";
 import PostDecisionImpact from "./components/PostDecisionImpact";
 import FinalResult from "./components/FinalResult";
 import HeadToHead from "./components/HeadToHead";
+import TyreDegradationView from "./components/TyreDegradationView";
 import { acceptSimulationDecision, fetchAvailableRaces, fetchCounterfactualSummary, fetchRecommendation, fetchTimeline, injectShockEvent, loadRaceSession } from "./api";
 import { useSimulation } from "./state/SimulationContext";
 
@@ -297,6 +298,17 @@ export default function App() {
 		uncertainty_events: uncertaintyEvents,
 		rival_cover_stop_probability: 0.0,
 	}), [totalLaps, currentLap, currentTyreAge, uncertaintyEvents]);
+	const historicalLapTimes = useMemo(() => {
+		const recorded = (raceMetadata?.p2_lap_states ?? [])
+			.sort((a, b) => a.lap_number - b.lap_number)
+			.map((lap) => lap.lap_time_seconds)
+			.filter((lapTime) => lapTime != null);
+		return recorded;
+	}, [raceMetadata]);
+	const projectedLapTimes = useMemo(
+		() => Array.from({ length: Math.max(1, totalLaps - (forkLap ?? 1) + 1) }, () => null),
+		[totalLaps, forkLap],
+	);
 	const historicalTick = useMemo(() => {
 		if (!raceMetadata || forkLap == null) return null;
 		const p1 = raceMetadata.p1_lap_states?.find((item) => item.lap_number === forkLap);
@@ -333,7 +345,9 @@ export default function App() {
 			{header}
 			<header className="topbar">
 				<div><p className="eyebrow">PITSENSE / STRATEGY CONSOLE</p><h1>Race strategy, with its work shown.</h1></div>
-				<div className="mode-badge">HISTORICAL REPLAY</div>
+				<div className={`mode-badge ${replayMode === "counterfactual" ? "mode-badge-projected" : "mode-badge-historical"}`}>
+					{replayMode === "counterfactual" ? "COUNTERFACTUAL — PROJECTED" : "HISTORICAL REPLAY"}
+				</div>
 			</header>
 			<section className="status-strip">
 				<span><i className="live-dot" /> {selectedRace?.year} {selectedRace?.event} / Lap {currentLap} of {totalLaps}</span>
@@ -341,19 +355,6 @@ export default function App() {
 				<span className={`status-${reoptStatus}`}>{statusLabel}</span>
 			</section>
 			{reoptError && <p className="error-note">Re-optimization error: {reoptError}</p>}
-			{replayMode === "counterfactual" && <ForkTransition forkLap={forkLap} action={acceptedAction} />}
-			{replayMode === "counterfactual" && <CounterfactualSimulation forkLap={forkLap} currentLap={currentLap} projectedTicks={projectedTicks} />}
-			{replayMode === "counterfactual" && <PostDecisionImpact forkLap={forkLap} acceptedAction={acceptedAction} historicalLap={historicalPitLap} historicalTick={historicalTick} projectedTick={projectedTick} />}
-			<FinalResult summary={counterfactualSummary} visible={projectedFinished} />
-			<HeadToHead
-				replayMode={replayMode}
-				completed={projectedFinished}
-				totalLaps={totalLaps}
-				forkLap={forkLap}
-				raceMetadata={raceMetadata}
-				projectedTicks={projectedTicks}
-				summary={counterfactualSummary}
-			/>
 			<section className="decision-layout">
 				<RaceCarPanels
 					metadata={raceMetadata}
@@ -365,7 +366,29 @@ export default function App() {
 				/>
 				{recommendation && <PrimaryDecision recommendation={recommendation} currentLap={currentLap} replayMode={replayMode} isUpdating={recommendationPending} onAction={handleDecision} />}
 			</section>
-			<section className="workspace-grid" id="comparison">
+			<TrackVisualization metadata={raceMetadata} currentLap={currentLap} replayMode={replayMode} />
+			<section className="assembly-row">
+				<TyreDegradationView currentLap={currentLap} currentTyreAge={currentTyreAge} recommendation={recommendation} />
+				<WhatIfPanel request={whatIfRequest} />
+			</section>
+			<section className="counterfactual-section">
+				{replayMode === "counterfactual" && <ForkTransition forkLap={forkLap} action={acceptedAction} />}
+				{replayMode === "counterfactual" && <CounterfactualSimulation forkLap={forkLap} currentLap={currentLap} projectedTicks={projectedTicks} />}
+				{replayMode === "counterfactual" && <PostDecisionImpact forkLap={forkLap} acceptedAction={acceptedAction} historicalLap={historicalPitLap} historicalTick={historicalTick} projectedTick={projectedTick} />}
+				<FinalResult summary={counterfactualSummary} visible={projectedFinished} />
+			</section>
+			<HeadToHead
+				replayMode={replayMode}
+				completed={projectedFinished}
+				totalLaps={totalLaps}
+				forkLap={forkLap}
+				raceMetadata={raceMetadata}
+				projectedTicks={projectedTicks}
+				summary={counterfactualSummary}
+			/>
+			<section className="workspace-grid assembly-lower" id="comparison">
+				<StrategyTimeline events={timelineEvents} loading={timelineLoading} error={timelineError} currentLap={currentLap} />
+				{replayMode === "counterfactual" && <DualLayerTimeline forkLap={forkLap} currentLap={currentLap} totalLaps={totalLaps} />}
 				<ShockEventConsole currentLap={currentLap} isRecomputing={reoptStatus === "recomputing"} activeEvent={shockEvent} onShock={triggerShockEvent} />
 				<DecisionComparison
 					eventType={shockEvent}
@@ -374,21 +397,17 @@ export default function App() {
 					baselineDecision={shockDecisions.find((decision) => decision.car === "P1")}
 					onAccept={handleDecision}
 				/>
-				<TrackVisualization metadata={raceMetadata} currentLap={currentLap} replayMode={replayMode} />
-				<WhatIfPanel request={whatIfRequest} />
 				<ReplayControls
 					key={`${replayInstanceKey}-${replayMode}-${forkLap ?? 0}`}
-					lapTimes={replayMode === "counterfactual" ? Array.from({ length: Math.max(1, totalLaps - forkLap + 1) }, () => null) : LAP_TIME_SECONDS}
+					lapTimes={replayMode === "counterfactual" ? projectedLapTimes : historicalLapTimes}
 					startLap={replayMode === "counterfactual" ? forkLap : 1}
 					startTyreAge={0}
 					onTick={handleTick}
 					simulation={replayMode === "counterfactual"}
 					onSimulationTick={handleSimulationTick}
 				/>
-				<StrategyTimeline events={timelineEvents} loading={timelineLoading} error={timelineError} currentLap={currentLap} />
-				{replayMode === "counterfactual" && <DualLayerTimeline forkLap={forkLap} currentLap={currentLap} totalLaps={totalLaps} />}
 			</section>
-			<footer className="footer-line"><span>Replay data: FastF1 cache</span><span>Data quality: 2 flagged gaps</span><span>Shock response target: &lt; 1.0s</span></footer>
+			<footer className="footer-line"><span>Replay data: FastF1 cache</span><span>Historical = solid · Projected = dashed</span><span>Data quality: 2 flagged gaps</span></footer>
 		</main>
 	);
 }
