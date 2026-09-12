@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Iterable
 
+from app.rival_model.rejoin_traffic import calculate_traffic_penalty
+
 
 @dataclass(frozen=True)
 class StrategyNode:
@@ -54,7 +56,10 @@ def build_strategy_graph(
             if compound == source.compound:
                 continue
             pit_target = StrategyNode(source.lap + 1, compound, 1)
-            traffic = 3.0 if source.lap % 7 == 0 else 0.0
+            traffic = calculate_traffic_penalty(
+                lap_number=source.lap,
+                pit_lane_loss_seconds=pit_lane_loss_seconds,
+            )
             pit_cost = base + pit_lane_loss_seconds + traffic
             pit_edge = StrategyEdge(
                 source,

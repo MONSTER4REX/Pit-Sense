@@ -1,0 +1,267 @@
+PRODUCT REQUIREMENTS DOCUMENT
+PitSense
+Predictive Pit Strategy & Undercut Intelligence
+Product Requirements & Technical Specification
+TrackShift Innovation Challenge — Theme: AI Motorsport Intelligence
+Problem Statement: Energy & Overtake Intelligence
+Version 1.0  |  Status: Draft for Build
+
+Document Purpose
+This PRD specifies a from-scratch build of PitSense for the TrackShift Innovation Challenge. Every component listed here is designed and implemented fresh, during the event window, in a new repository. The scope targets the full feature set the team envisioned — not a stripped demo — because winning requires depth judges and reviewing engineers can actually test, not a thin proof-of-concept.
+
+1. Executive Summary
+PitSense is a real-time pit-strategy optimization system that models tyre degradation, track position, and rival behaviour as a graph-optimization problem, returning an explainable, confidence-scored recommendation for the optimal pit window and undercut/overcut decision. Every module is implemented from a clean-room build: original architecture, original code, and a repository history that reflects the actual work done.
+Build constraint: New GitHub repository, first commit dated within the event window, zero files copied from any earlier project.
+Scope philosophy: Full planned feature set targeted for the submission — not a 2-feature demo. Depth and completeness are treated as the primary differentiator, since the explainability/rejoin/rival concepts are only convincing to F1 engineers if they are actually implemented, not just described.
+2. Prior Art & Competitive Landscape
+Researched before scoping this PRD, so effort is spent on genuine gaps rather than re-solving problems that are already solved at the top of the sport.
+System / Source
+Approach
+Key Limitation
+Team proprietary simulators (Ferrari, McLaren, Mercedes, Red Bull, etc.)
+Millions of Monte Carlo race simulations combined with game-theory rival modelling; supercomputer-backed
+Proprietary, closed, not explainable, inaccessible outside top-tier team budgets
+Academic Bi-LSTM pit-decision models
+Deep learning classifier for pit-call timing
+Prediction only — no optimization, no rival or traffic modelling, no live UI
+Stackelberg game-theoretic framework (research)
+Leader-follower game theory for undercut defence
+Research construct only, never shipped as usable software
+Race Strategy Reinforcement Learning (RSRL)
+RL trained against a proprietary simulator, post-hoc explainability
+Confirms industry-wide low trust in black-box strategy AI — the exact gap this build targets
+Public F1 strategy simulators
+Bayesian tyre-degradation + Monte Carlo comparison
+Pre-race planning only, static, no live rival/traffic modelling
+Conclusion: no existing system combines graph-based optimization, mandatory explainability, live rejoin/rival modelling, and accessible architecture in one usable tool. This remains the gap the fresh build targets.
+3. Scope Philosophy — Build for Maximum, Not for Demo
+The instruction driving this PRD is explicit: build everything originally planned, not a thin slice. The feature list below is treated as the actual submission target, with Section 6 breaking it into a dependency-ordered build sequence so that if time runs out, whatever is cut is cut deliberately and visibly — not silently missing.
+3.1 Full feature set targeted for submission
+FastF1-based historical data ingestion for any completed race
+Graph-based strategy engine (Dijkstra shortest-path over lap/tyre-state nodes)
+Mandatory explainability breakdown on every recommendation (tyre delta, traffic, rival gap, pit-lane loss)
+Rejoin-traffic simulator projecting post-pit track position and clear-air risk
+Rival cover-stop probability modelling for at least one tracked rival
+Confidence-scored recommendations that widen under Safety Car/VSC/weather uncertainty
+Live-replay WebSocket tick-stream engine with configurable speed
+What-If Simulator comparing Pit Now / Stay Out / Extend side-by-side
+Strategy Timeline logging every pit call, undercut attempt, and Shock Event
+Strategist Console for manually injecting Shock Events during replay/testing
+Historical validation suite comparing recommendations against real strategy calls
+Every item above is in-scope for this submission, not Phase 2. Section 6 sequences them by dependency so the team always has a working, demoable product at any cut-off point, but the target is all of them.
+4. Product Vision & Goals
+4.1 Vision Statement
+Give race engineers a live, explainable second opinion on pit strategy — one that shows its work, quantifies uncertainty, and runs on infrastructure any team can afford, without replacing human judgement.
+4.2 Goals
+Deliver the full feature set in Section 3.1, built entirely fresh, in a new repository, with commit history confined to the event window.
+Make every recommendation explainable, confidence-scored, and traceable to named factors — no exceptions.
+Validate against real historical race data before calling any milestone complete.
+4.3 Non-Goals (this build)
+Live telemetry ingestion from a moving car or live timing feed — historical replay only.
+Full-grid, multi-driver simulation — one tracked car against modelled rivals.
+Mobile app or pit-wall hardware integration.
+5. System Architecture — Built From Scratch
+Each module below is designed and implemented new. Descriptions specify intent and behaviour, so the build team implements from this spec directly.
+Module
+Specification
+Data Ingestion Layer
+Pulls lap times, tyre compounds, pit-stop timestamps, sector times, and track-position gaps from FastF1 for any completed race; normalizes into an internal race-state schema; flags missing/incomplete data explicitly rather than interpolating silently.
+Strategy Graph Engine
+Represents each lap/tyre-state as a node; represents stay-out/pit-now/extend-stint choices as weighted edges (pit-lane loss, degradation cost, traffic cost); runs Dijkstra to find minimum-total-race-time path; recomputes on every tick or material state change.
+Explainability Module
+Wraps every recommendation with a factor breakdown (tyre-delta risk, traffic/rejoin risk, rival cover-stop probability, pit-lane time loss); rendered as a live bar chart; never optional, never delayed.
+Rejoin-Traffic & Rival Model
+Projects post-pit track position against current gaps; flags rejoin-into-traffic risk; computes a live cover-stop probability for a tracked rival from tyre age and historical pit-response patterns in the loaded dataset.
+Confidence Scoring Layer
+Attaches a calibrated confidence band to every recommendation; automatically widens under Safety Car/VSC/weather uncertainty.
+Live Replay Engine
+WebSocket tick-stream replaying a loaded historical race lap-by-lap at configurable speed (1x/2x/5x).
+What-If Simulator
+Compares Pit Now / Stay Out / Extend branches side-by-side, each with its own projected outcome and explainability breakdown.
+Strategy Timeline & Console
+Logs every pit call, undercut attempt, and Shock Event with lap/timestamp; allows manual Shock Event injection (Safety Car, VSC, rain, puncture) for testing engine responsiveness.
+Dashboard / Frontend
+Live race map, tyre-degradation countdown, Undercut Risk Score tiering (Safe/Marginal/Optimal/Critical), explainability charts, timeline, what-if panel — all built as new components in a new codebase.
+5.5. Tech Stack
+Selected deliberately for a single-race, real-time strategy console under a hard 1-second re-optimization budget (FR-7) — not defaulted to the most popular option in each category. Each choice states what was rejected and why, so the stack itself is auditable, consistent with the project's explainability-first positioning.
+5.5.1 Backend
+Layer
+Choice
+Rationale / rejected alternatives
+Language
+Python 3.11+
+FastF1 (the only realistic historical F1 data source) is Python-only; also the language F1 strategy/quant engineers already read
+API framework
+FastAPI
+Native async + built-in WebSocket support for the tick stream; auto-generated OpenAPI docs. Rejected Flask (no native async/WS without add-ons) and Django (ORM-heavy, wrong shape for a stateless compute service)
+Data ingestion
+FastF1
+Only maintained, free library covering lap times, tyre compounds, pit-stop timestamps, sector data, and gaps for real sessions
+Graph / optimization engine
+NumPy + hand-rolled Dijkstra (heapq-based)
+Dynamic edge weights must be recomputed every tick under a 1-second budget (FR-7); rejected NetworkX as too slow/opaque at this latency requirement, and opacity undercuts the explainability pitch
+Data validation
+Pydantic v2
+Schema-validates every race-state object, recommendation, and explainability payload at the boundary; rejects invalid/missing data loudly instead of silently coercing it (supports the no-silent-interpolation constraint)
+Tick scheduling
+Native asyncio event loop
+Tick stream is in-process and time-critical; rejected Celery/RQ + broker as unneeded infrastructure weight for a single-race replay engine at this stage
+Testing
+pytest + pytest-asyncio
+Standard; required so the Section 9 validation suite runs as real automated tests, not manual checks
+5.5.2 Frontend
+Layer
+Choice
+Rationale / rejected alternatives
+Framework
+React 18 + Vite
+Fast dev/rebuild loop; rejected Create React App (unmaintained) and Next.js (SSR/routing solve problems this single-page console doesn't have)
+Realtime transport
+Native WebSocket API + reconnect wrapper
+Both client and server are ours; rejected Socket.IO's fallback transports and room abstraction as unneeded overhead against a hard latency budget
+Charts
+Recharts
+Minimal boilerplate for bar/line charts that must render every tick without jank; rejected D3 as too much dev-time cost for this scope
+Styling
+Tailwind CSS
+Speed of building a dense, data-heavy operator console without a separate design-system build
+State management
+React Context + hooks
+App state is a single live race session; rejected Redux as unjustified ceremony at this scale
+5.5.3 Data & Storage
+Layer
+Choice
+Rationale / rejected alternatives
+Race data cache
+FastF1 built-in local file cache
+FastF1 already caches API responses to disk; no database needed for read-only historical race data in the MVP
+App/session persistence
+SQLite (Postgres as a later upgrade path)
+Persists strategy timeline logs, validation-run results, and confidence-band history; zero-ops for this build stage. Rejected Postgres from day one as premature infrastructure for a single-race console
+5.5.4 Infra & Dev Tooling
+Layer
+Choice
+Rationale / rejected alternatives
+Version control
+Git + GitHub, new repository
+Per the origin constraint (Section 8): first commit dated within the event window, no ported history
+Dependency management
+venv + requirements.txt (Python), npm (JS)
+Keeps the stack legible to any reviewer; rejected Poetry/pnpm as added complexity not justified at this scale
+CI
+GitHub Actions running pytest on push
+Concrete, automatic evidence the Section 9 validation suite actually runs — engineering discipline plus a credibility signal to judges/reviewers
+6. Build Sequence (Dependency-Ordered)
+Because the goal is the full feature set rather than a minimal demo, sequencing matters: build in this order so that at any point in the event, the most-demoable, most-differentiating features are already working.
+Order
+Component
+Why this position
+1
+Data Ingestion Layer
+Nothing works without real race data loaded and normalized.
+2
+Strategy Graph Engine
+The core optimization — must exist before anything can be explained, scored, or displayed.
+3
+Explainability Module
+Non-negotiable per Section 3; must ship alongside the engine, not after it.
+4
+Confidence Scoring Layer
+Small, high-value addition once the engine produces recommendations.
+5
+Dashboard / Frontend (core views)
+Needed to demo everything built so far — race map, degradation countdown, risk tiers, explainability charts.
+6
+Live Replay Engine
+Turns the static engine into a live, demoable simulation.
+7
+Rejoin-Traffic & Rival Model
+Adds the differentiating depth once the core loop is visibly working.
+8
+What-If Simulator
+Builds on the now-stable engine + explainability + rival model.
+9
+Strategy Timeline & Console
+Polish layer for demo control and judge interaction.
+10
+Historical Validation Suite
+Run once the full pipeline is stable; required before declaring the build complete.
+7. Functional Requirements
+7.1 Data Ingestion
+FR-1: Ingest historical race data via FastF1 for any completed race in its dataset.
+FR-2: Normalize ingested data into the internal race-state schema.
+FR-3: Validate completeness and flag gaps explicitly rather than silently interpolating.
+7.2 Strategy Engine
+FR-4: Represent each lap/tyre-state as a graph node.
+FR-5: Represent stay-out/pit-now/extend decisions as weighted edges (pit-lane loss, degradation cost, traffic cost).
+FR-6: Compute minimum-total-race-time path via Dijkstra, recomputed on tick or material state change.
+FR-7: Re-optimize within 1 second of a Shock Event being injected.
+7.3 Explainability
+FR-8: Every recommendation includes a factor breakdown (tyre delta, traffic, rival cover-stop probability, pit-lane loss).
+FR-9: Breakdown renders live, alongside the recommendation, never delayed or static.
+FR-10: No recommendation may render without its explainability breakdown — hard gate.
+7.4 Rejoin & Rival Modelling
+FR-11: Project post-pit track position accounting for pit-lane loss and current gaps.
+FR-12: Flag rejoin-into-traffic risk and fold it into the Undercut Risk Score.
+FR-13: Compute rival cover-stop probability for at least one tracked rival from tyre age and historical response patterns.
+7.5 What-If Simulator
+FR-14: Compare at least three branches side-by-side: Pit Now, Stay Out, Extend Stint.
+FR-15: Each branch shows projected time delta, projected finishing position, and its own explainability breakdown.
+7.6 Dashboard & Replay
+FR-16: Replay a loaded race lap-by-lap over a WebSocket tick-stream at configurable speed.
+FR-17: Strategy Timeline logs every pit call, undercut attempt, and Shock Event with lap number and timestamp.
+FR-18: Strategist Console allows manual Shock Event injection during replay.
+7.7 Confidence Scoring
+FR-19: Every recommendation carries a confidence band reflecting current uncertainty.
+FR-20: The confidence band widens automatically under Safety Car/VSC/rain.
+8. Strictly Not To Do
+Do NOT copy, port, or reference code, architecture diagrams, or file structures from any external source without attribution. All core modules (ingestion, engine, explainability, rival modelling) must be original implementations written for this project.
+Do NOT initialize the repository from an export or template that isn't a clean starting point — commit history should reflect real, incremental build progress.
+Do NOT present any recommendation without its explainability breakdown rendered alongside it.
+Do NOT claim or imply live-car telemetry integration — historical replay only, and UI copy must say so.
+Do NOT silently interpolate missing tyre/lap data — flag gaps explicitly.
+Do NOT present a single deterministic recommendation without a confidence band.
+Do NOT model rival behaviour as pure random noise — use the cover-stop probability model at minimum.
+Do NOT let the engine silently fail to re-optimize after a Shock Event — surface a stale/error state instead.
+Do NOT cut Section 3.1 features silently under time pressure — if something must be dropped, drop from the end of the Section 6 build sequence and say so explicitly in the submission notes.
+Do NOT hardcode demo-only values into scoring functions to make a live demo look better.
+Do NOT skip the historical validation suite before declaring the build complete.
+9. Validation & Success Criteria
+Replay at least 5 complete historical races and compare recommended pit windows against actual team strategy calls.
+Benchmark predicted tyre-cliff onset against actual lap-time drop-off points.
+Inject Safety Car/VSC/rain events during replay and confirm re-optimization completes within the 1-second budget.
+Run full test coverage across simulation and scoring modules before any submission-candidate build.
+Criterion
+Target
+Status Gate
+Explainability breakdown present
+100% of recommendations
+Blocking
+Re-optimization latency after Shock Event
+≤ 1 second
+Blocking
+Historical replay strategy-window agreement
+Directionally consistent on ≥ 3 of 5 replayed races
+Reported, not blocking
+Tyre-cliff prediction accuracy
+Within ±2 laps of actual observed drop-off
+Reported, not blocking
+Confidence band present on every recommendation
+100%
+Blocking
+Repository history reflects real incremental build progress
+100%
+Blocking — submission eligibility
+
+Build Validation Addendum
+Section 9 was executed against five completed FastF1 Race sessions: 2024 Canada, 2023 Netherlands, 2024 Australia, 2024 British Grand Prix, and 2024 Azerbaijan.
+Verified results:
+- Directional pit-window agreement: 3/5, meeting the reported target.
+- Tyre-cliff accuracy: 1/4 detected cliff onsets within +/-2 laps.
+- Maximum measured real Shock Event re-optimization: 0.22966 seconds.
+- Real replay ticks processed: 303.
+- Safety Car/VSC evidence: 4/5 races; wet/intermediate evidence: 5/5 races.
+Known Limitation: Tyre-Cliff Detection
+The current detector uses a median baseline and MAD-based hard threshold per contiguous compound stint, requiring three consecutive laps above the threshold. Root-cause analysis found three stints too short for a curve estimate and eight stints with no threshold crossing. Wet-condition pace and compound transitions contaminate the assumption that one stint is a clean degradation curve. Canada is the clearest miss: the model proposed lap 18 while the actual winner stop was lap 46. This result is reported as a known limitation; it is not removed from the validation record.
+Demo Positioning
+Use 2023 Netherlands or 2024 Azerbaijan for the primary walkthrough. Use 2024 Canada as the deliberate limitation case and explain that the next modeling step is condition-aware separation of wet pace, compound changes, and gradual tyre wear.

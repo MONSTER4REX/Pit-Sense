@@ -1,4 +1,5 @@
 @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
 
 :root { font-family: 'Space Grotesk', sans-serif; color: #e8edf2; background: #0b1015; font-synthesis: none; }
 * { box-sizing: border-box; }
@@ -28,4 +29,38 @@ h2 { font-size: 1.5rem; margin: 0 0 24px; }
 .data-note { color: #71828e; font: 11px/1.6 'DM Mono', monospace; margin-top: 28px; }
 .map-panel { grid-column: 1 / -1; min-height: 220px; }.track-map { position: relative; height: 105px; margin: 12px 0 23px; overflow: hidden; background: #111a20; border: 1px solid #2a353e; }.track-line { position: absolute; inset: 35px 8% 28px; border: 3px solid #526671; border-radius: 50% 20% 48% 14%; transform: rotate(-4deg); }.car-marker, .traffic-marker { position: absolute; width: 12px; height: 12px; border-radius: 50%; top: 48px; }.car-marker { left: 29%; background: #e4a84f; box-shadow: 0 0 18px #e4a84f; }.traffic-marker { left: 58%; background: #ee796e; box-shadow: 0 0 18px #ee796e; }.map-legend { justify-content: flex-start; color: #8998a2; }.marker { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 7px; }.marker.car { background: #e4a84f; }.marker.traffic { background: #ee796e; }
 .footer-line { color: #62727d; margin-top: 22px; }
-@media (max-width: 760px) { .topbar, .status-strip, .confidence, .footer-line { align-items: flex-start; flex-direction: column; }.workspace-grid { grid-template-columns: 1fr; }.map-panel { grid-column: auto; }.mode-badge { align-self: flex-start; } }
+.status-strip .status-synced { color: #7bd4a5; }
+.status-strip .status-recomputing { color: #e4a84f; }
+.status-strip .status-stale_timeout, .status-strip .status-error { color: #ee796e; }
+.error-note { color: #ee796e; font: 12px/1.6 'DM Mono', monospace; margin: 12px 0; }
+
+.risk-tier { display: inline-block; margin: 12px 0; padding: 3px 9px; font: 500 11px 'DM Mono', monospace; letter-spacing: .06em; border: 1px solid; border-radius: 3px; }
+.risk-tier-safe { color: #7bd4a5; border-color: #7bd4a5; }
+.risk-tier-marginal { color: #e4a84f; border-color: #e4a84f; }
+.risk-tier-optimal { color: #6fb2e6; border-color: #6fb2e6; }
+.risk-tier-critical { color: #ee796e; border-color: #ee796e; }
+
+.whatif-panel { grid-column: 1 / -1; }
+.whatif-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 20px; }
+.whatif-branch { border: 1px solid #2a353e; padding: 16px; background: rgba(19, 27, 34, .6); }
+.whatif-branch-head { display: flex; align-items: center; justify-content: space-between; font: 600 13px 'DM Mono', monospace; color: #e4a84f; margin-bottom: 10px; }
+.whatif-metric { display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: #aab8c2; margin: 6px 0; }
+.whatif-metric strong { color: #fff; }
+.estimate-flag { color: #e4a84f; font-style: normal; font-size: 10px; text-transform: uppercase; letter-spacing: .04em; margin-left: 4px; }
+
+.timeline-panel { grid-column: 1 / -1; }
+.timeline-list { list-style: none; margin: 16px 0 0; padding: 0; max-height: 220px; overflow-y: auto; }
+.timeline-row { display: grid; grid-template-columns: 70px 130px 1fr 90px; gap: 10px; padding: 8px 0; border-bottom: 1px solid #232e36; font: 12px/1.4 'DM Mono', monospace; color: #b9c5cc; }
+.timeline-lap { color: #e4a84f; }
+.timeline-type { color: #7bd4a5; }
+.timeline-time { color: #71828e; text-align: right; }
+
+.replay-panel { grid-column: 1 / -1; }
+.replay-controls-row { display: flex; align-items: center; gap: 16px; margin-top: 16px; }
+.speed-group { display: flex; gap: 6px; }
+.speed-button { border: 1px solid #50606c; background: transparent; color: #aab8c2; padding: 6px 10px; cursor: pointer; }
+.speed-button.speed-active { border-color: #e4a84f; color: #e4a84f; }
+.replay-scrub { width: 100%; margin-top: 16px; }
+.replay-readout { display: flex; justify-content: space-between; margin-top: 10px; font: 12px 'DM Mono', monospace; color: #92a1ac; }
+
+@media (max-width: 760px) { .topbar, .status-strip, .confidence, .footer-line { align-items: flex-start; flex-direction: column; }.workspace-grid { grid-template-columns: 1fr; }.map-panel { grid-column: auto; }.mode-badge { align-self: flex-start; }.whatif-grid { grid-template-columns: 1fr; } }
