@@ -1,4 +1,4 @@
-# PitSense — Updated Backend Simulation Plan
+ # PitSense — Updated Backend Simulation Plan
 
 ## 1. Product objective
 

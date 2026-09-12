@@ -14,10 +14,67 @@ Netherlands, 2024 Australia, 2024 British Grand Prix, and 2024 Azerbaijan.
 - Tyre-cliff accuracy: **1/4 detected cliffs within +/-2 laps**
 - Maximum re-optimization latency after real Safety Car/VSC evidence: **0.230s**
 - Real replay ticks processed: **303**
-- Backend suite: **10 tests passed**
+- Backend suite: **15 tests passed**
 
 The complete per-race record is in
 [`data/validation/section9_real_races.json`](data/validation/section9_real_races.json).
+
+## Updated Simulation Plan
+
+PitSense is being extended from historical replay into a controlled
+counterfactual simulation. Before a fork, both cars follow the observed
+FastF1 race data. After a user-injected Shock Event, both cars adapt to the
+same changed environment:
+
+- **P2 / PitSense** uses the strategy graph, tyre degradation, pit-lane loss,
+  traffic and rival-response signals, confidence, and explainability.
+- **P1 / Baseline Strategy** uses a deterministic conventional pit-window
+  model. It is an adaptive comparator, not an official F1 strategy model.
+- The original race remains available as the **Historical** reference. The
+  two adaptive paths are labelled **Counterfactual Projection** and are never
+  presented as what actually happened.
+
+### Simulation Flow
+
+1. Select a supported historical race and load the actual P1 and P2 finishers,
+  lap states, tyre data, pit events, and recorded race-control messages.
+2. Replay the historical race from Lap 1. Every tick identifies its mode as
+  `HISTORICAL` or `PROJECTED` and includes car state and backend-owned
+  strategy decisions.
+3. Inject a Safety Car, VSC, rain, or other supported Shock Event. Both
+  policies reconsider the same state and return comparable decisions.
+4. Accept or override the PitSense action with `PIT`, `STAY_OUT`, or `EXTEND`.
+  This creates a recorded counterfactual fork.
+5. Continue the projected race lap by lap while P1 and P2 adapt independently.
+  Projected tyre age, lap time, position, gap, pit status, and decisions remain
+  explicitly distinguishable from historical values.
+6. Compare the historical finish with the PitSense and Baseline projected
+  outcomes, including assumptions and limitations.
+
+### Simulation API
+
+The backend exposes the current simulation boundaries through:
+
+- `GET /api/races/available`
+- `GET /api/race/{year}/{event}/session`
+- `POST /api/simulation/shock`
+- `POST /api/simulation/decision`
+- `GET /api/simulation/counterfactual`
+- `/ws/replay` with simulation tick payloads
+
+The implementation deliberately uses explicit approximations where FastF1
+does not provide sub-lap pit-lane timing. It does not fabricate fuel or energy
+data, claim that PitSense changed history, or call the comparator an official
+team strategist.
+
+### Roadmap
+
+The current backend foundation includes dual policy decisions, historical vs
+projected contracts, user-controlled forks, FastF1 P1/P2 loading, and
+counterfactual summaries. Remaining work is to connect the full race-selection
+and fork workflow to the frontend, improve stateful projected tyre and gap
+modelling, expose the three timelines visually, add overtake-lap reporting,
+and validate recommendation changes across every supported real race.
 
 ## Known Limitations
 
