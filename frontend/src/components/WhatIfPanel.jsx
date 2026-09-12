@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import ExplainabilityChart from "./ExplainabilityChart";
 import UndercutRiskTier from "./UndercutRiskTier";
 import { fetchWhatIf } from "../api";
@@ -13,18 +13,23 @@ export default function WhatIfPanel({ request, currentPosition = 4 }) {
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState(null);
 
-	const runComparison = async () => {
-		setLoading(true);
-		setError(null);
-		try {
-			const data = await fetchWhatIf(request);
-			setBranches(data);
-		} catch (err) {
-			setError(err.message);
-		} finally {
-			setLoading(false);
-		}
-	};
+	useEffect(() => {
+		let isCancelled = false;
+		const runComparison = async () => {
+			setLoading(true);
+			setError(null);
+			try {
+				const data = await fetchWhatIf(request);
+				if (!isCancelled) setBranches(data);
+			} catch (err) {
+				if (!isCancelled) setError(err.message);
+			} finally {
+				if (!isCancelled) setLoading(false);
+			}
+		};
+		runComparison();
+		return () => { isCancelled = true; };
+	}, [request]);
 
 	const entries = branches ? Object.entries(branches) : [];
 	const bestTime = entries.length ? Math.min(...entries.map(([, branch]) => branch.projected_total_time_seconds)) : 0;
@@ -33,12 +38,10 @@ export default function WhatIfPanel({ request, currentPosition = 4 }) {
 		<article className="panel whatif-panel">
 			<div className="panel-label">WHAT-IF SIMULATOR</div>
 			<h2>Branch comparison</h2>
-			<button className="shock-button" onClick={runComparison} disabled={loading}>
-				{loading ? "Running comparison…" : "Run Pit Now / Stay Out / Extend comparison"}
-			</button>
+			{loading && !branches && <p className="data-note">Running what-if simulations...</p>}
 			{error && <p className="error-note">What-if comparison failed: {error}</p>}
 			{entries.length > 0 && (
-				<div className="whatif-grid">
+				<div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-5">
 					{entries.map(([key, branch]) => {
 						const delta = branch.projected_total_time_seconds - bestTime;
 						const position = Math.min(20, Math.max(1, Math.round(currentPosition + delta / SECONDS_PER_POSITION)));

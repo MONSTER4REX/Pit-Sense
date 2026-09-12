@@ -1,4 +1,6 @@
-export default function ExplainabilityChart({ explainability }) {
+import React from "react";
+
+const ExplainabilityChart = React.memo(function ExplainabilityChart({ explainability }) {
 	const factors = [
 		["Tyre delta risk", explainability.tyre_delta_risk, "s"],
 		["Traffic / rejoin risk", explainability.traffic_rejoin_risk, "s"],
@@ -15,4 +17,6 @@ export default function ExplainabilityChart({ explainability }) {
 			))}
 		</div>
 	);
-}
+});
+
+export default ExplainabilityChart;

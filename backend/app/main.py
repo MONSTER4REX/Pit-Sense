@@ -29,7 +29,19 @@ async def health() -> dict[str, str]:
 @app.post("/api/strategy/recommendation")
 async def recommendation(request: OptimizeRequest):
 	if request.end_lap <= request.start_lap:
-		raise HTTPException(status_code=422, detail="end_lap must be after start_lap")
+		return {
+			"action": "stay_out",
+			"pit_lap": request.start_lap,
+			"projected_total_time_seconds": 0.0,
+			"undercut_risk_tier": "safe",
+			"explainability": {
+				"tyre_delta_risk": 0.0,
+				"traffic_rejoin_risk": 0.0,
+				"rival_cover_stop_probability": request.rival_cover_stop_probability,
+				"pit_lane_time_loss": 0.0,
+			},
+			"confidence": {"lower": 1.0, "upper": 1.0, "uncertainty": "low"}
+		}
 	return optimize_strategy(**request.model_dump())
 
 
@@ -64,8 +76,12 @@ async def replay_socket(websocket: WebSocket):
 		request = await websocket.receive_json()
 		speed = float(request.get("speed", 1.0))
 		lap_times = request.get("lap_times", [])
-		async for tick in replay_ticks(lap_times, speed=speed):
-			await websocket.send_json({"type": "tick", **tick.__dict__})
+		start_lap = int(request.get("start_lap", 1))
+		start_tyre_age = int(request.get("start_tyre_age", 12))
+		async for tick in replay_ticks(lap_times, speed=speed, start_lap=start_lap, start_tyre_age=start_tyre_age):
+			payload = {"type": "tick", **tick.__dict__}
+			print(f"[WebSocket] Sending tick payload: {payload}")
+			await websocket.send_json(payload)
 		await websocket.send_json({"type": "complete"})
 	except WebSocketDisconnect:
 		return

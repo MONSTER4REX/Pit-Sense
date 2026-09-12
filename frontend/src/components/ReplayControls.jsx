@@ -2,10 +2,12 @@ import { useTickStream } from "../hooks/useTickStream";
 
 const SPEEDS = [1, 2, 5];
 
-export default function ReplayControls({ lapTimes, startLap }) {
+export default function ReplayControls({ lapTimes, startLap, startTyreAge = 12, onTick }) {
 	const { isPlaying, speed, currentTick, error, complete, play, pause, scrubToLap, changeSpeed } = useTickStream({
 		lapTimes,
 		startLap,
+		startTyreAge,
+		onTick,
 	});
 	const endLap = startLap + lapTimes.length - 1;
 	const scrubValue = currentTick?.lapNumber ?? startLap;
@@ -14,15 +16,18 @@ export default function ReplayControls({ lapTimes, startLap }) {
 		<article className="panel replay-panel">
 			<div className="panel-label">REPLAY CONTROLS</div>
 			<h2>Tick-stream playback</h2>
-			<div className="replay-controls-row">
-				<button className="shock-button" onClick={isPlaying ? pause : play}>
+			<div className="flex items-center gap-4 mt-4">
+				<button 
+					className="px-4 py-2 bg-slate-800 border border-slate-600 rounded hover:bg-slate-700 transition-colors text-sm font-mono uppercase tracking-wide cursor-pointer text-slate-200" 
+					onClick={isPlaying ? pause : play}
+				>
 					{isPlaying ? "Pause" : "Play"}
 				</button>
-				<div className="speed-group">
+				<div className="flex gap-1.5 bg-slate-800 p-1 rounded border border-slate-700">
 					{SPEEDS.map((candidate) => (
 						<button
 							key={candidate}
-							className={`speed-button ${speed === candidate ? "speed-active" : ""}`}
+							className={`px-3 py-1.5 text-xs font-mono rounded transition-all cursor-pointer ${speed === candidate ? "bg-orange-500 text-black font-bold shadow-sm" : "text-slate-300 hover:bg-slate-700 hover:text-white"}`}
 							onClick={() => changeSpeed(candidate)}
 						>
 							{candidate}x
