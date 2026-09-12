@@ -17,6 +17,7 @@ class SimulationEngine:
 	pit_lane_loss_seconds: float = 20.0
 
 	def __post_init__(self) -> None:
+		self.session_id = uuid4().hex
 		self.scenario_id = "historical"
 		self.shock_event: ShockEventType | None = None
 		self.shock_lap: int | None = None
@@ -97,6 +98,7 @@ class SimulationEngine:
 			]
 		return SimulationTick(
 			lap=lap,
+			session_id=self.session_id,
 			mode="HISTORICAL",
 			scenario_id=self.scenario_id,
 			shock_event=self.shock_event.value if self.shock_event else None,
@@ -167,6 +169,7 @@ class SimulationEngine:
 			p2.gap_to_leader_seconds = max(0.0, p2.gap_to_leader_seconds - gap_reduction)
 		return SimulationTick(
 			lap=lap,
+			session_id=self.session_id,
 			mode="PROJECTED",
 			scenario_id=self.scenario_id,
 			shock_event=self.shock_event.value if self.shock_event else None,
@@ -186,6 +189,7 @@ class SimulationEngine:
 		historical_gap = self._historical_car(self.p2, "P2", self.end_lap).gap_to_leader_seconds
 		projected_gap = abs(p2.gap_to_leader_seconds - p1.gap_to_leader_seconds)
 		return CounterfactualSummary(
+			session_id=self.session_id,
 			historical_finish=historical,
 			pitsense_projected_finish=p2.position,
 			baseline_projected_finish=p1.position,

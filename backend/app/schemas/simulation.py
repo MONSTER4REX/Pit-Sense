@@ -47,6 +47,7 @@ class SimulationTick(BaseModel):
 	model_config = ConfigDict(extra="forbid")
 
 	lap: int = Field(ge=1)
+	session_id: str = Field(min_length=1)
 	mode: SimulationMode
 	scenario_id: str
 	shock_event: str | None = None
@@ -68,6 +69,7 @@ class DecisionRecord(BaseModel):
 class CounterfactualSummary(BaseModel):
 	model_config = ConfigDict(extra="forbid")
 
+	session_id: str = Field(min_length=1)
 	historical_finish: dict[CarRole, int]
 	pitsense_projected_finish: int = Field(ge=1)
 	baseline_projected_finish: int = Field(ge=1)

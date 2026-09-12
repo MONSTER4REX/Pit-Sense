@@ -31,6 +31,7 @@ def test_shock_recomputes_both_policies_without_leaving_historical_mode() -> Non
 	shock = engine.inject_shock(3, ShockEventType.SAFETY_CAR)
 
 	assert before.mode == "HISTORICAL"
+	assert before.session_id == shock.session_id
 	assert all(car.mode == "HISTORICAL" for car in shock.cars)
 	assert {decision.model_type for decision in shock.decisions} == {"PITSENSE", "BASELINE"}
 	assert all(decision.lap == 3 for decision in shock.decisions)
@@ -47,6 +48,7 @@ def test_accepting_action_creates_projected_fork_and_summary() -> None:
 	assert all(car.mode == "PROJECTED" for car in projected.cars)
 	assert next(decision for decision in projected.decisions if decision.car == "P2").action == "PIT"
 	assert summary.historical_vs_projected == "COUNTERFACTUAL_PROJECTION"
+	assert summary.session_id == engine.session_id
 	assert summary.assumptions
 
 
