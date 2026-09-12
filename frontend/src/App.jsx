@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import ExplainabilityChart from "./components/ExplainabilityChart";
 import WhatIfPanel from "./components/WhatIfPanel";
 import StrategyTimeline from "./components/StrategyTimeline";
 import ReplayControls from "./components/ReplayControls";
@@ -44,7 +43,6 @@ export default function App() {
 	const [reoptStatus, setReoptStatus] = useState("loading"); // loading | synced | recomputing | stale_timeout | error
 	const [reoptError, setReoptError] = useState(null);
 	const [currentTyreAge, setCurrentTyreAge] = useState(0);
-	const [currentGap, setCurrentGap] = useState(null);
 	const [uncertaintyEvents, setUncertaintyEvents] = useState([]);
 	const [timelineEvents, setTimelineEvents] = useState([]);
 	const [timelineLoading, setTimelineLoading] = useState(true);
@@ -62,7 +60,6 @@ export default function App() {
 		setReoptStatus("loading");
 		setReoptError(null);
 		setCurrentTyreAge(0);
-		setCurrentGap(null);
 		setUncertaintyEvents([]);
 		setTimelineEvents([]);
 		setTimelineLoading(true);
@@ -167,7 +164,6 @@ export default function App() {
 			currentTyreAgeRef.current = tick.tyreAge;
 			setCurrentTyreAge(tick.tyreAge);
 		}
-		if (tick.distanceToDriverAhead !== undefined) setCurrentGap(tick.distanceToDriverAhead);
 		if (!totalLaps) return;
 		const requestId = ++tickRequestRef.current;
 		setRecommendationPending(true);
@@ -285,16 +281,17 @@ export default function App() {
 				<span className={`status-${reoptStatus}`}>{statusLabel}</span>
 			</section>
 			{reoptError && <p className="error-note">Re-optimization error: {reoptError}</p>}
-			<RaceCarPanels
-				metadata={raceMetadata}
-				replayMode={replayMode}
-				recommendation={recommendation}
-				isUpdating={recommendationPending}
-				currentLap={currentLap}
-				currentTyreAge={currentTyreAge}
-				currentGap={currentGap}
-			/>
-			{recommendation && <PrimaryDecision recommendation={recommendation} currentLap={currentLap} replayMode={replayMode} isUpdating={recommendationPending} onAction={handleDecision} />}
+			<section className="decision-layout">
+				<RaceCarPanels
+					metadata={raceMetadata}
+					replayMode={replayMode}
+					recommendation={recommendation}
+					isUpdating={recommendationPending}
+					currentLap={currentLap}
+					currentTyreAge={currentTyreAge}
+				/>
+				{recommendation && <PrimaryDecision recommendation={recommendation} currentLap={currentLap} replayMode={replayMode} isUpdating={recommendationPending} onAction={handleDecision} />}
+			</section>
 			<section className="workspace-grid" id="comparison">
 				<article className="panel recommendation-panel">
 					<div className="panel-label">REPLAY ACTIONS</div>
@@ -302,12 +299,6 @@ export default function App() {
 						Inject Shock Event
 					</button>
 					<p className="mt-3 text-[11px] font-mono leading-relaxed text-[#71828e]">Triggering a shock event recalculates strategy and widens the confidence band.</p>
-				</article>
-				<article className="panel explainability-panel">
-					<div className="panel-label">WHY THIS PATH</div>
-					<h2>Explainability breakdown</h2>
-					{recommendationPending ? <p className="data-note">Recalculating from the current replay tick…</p> : <ExplainabilityChart explainability={recommendation.explainability} />}
-					<p className="data-note">Factors are calculated from the loaded historical session. Missing source fields are flagged, never interpolated.</p>
 				</article>
 				<TrackVisualization metadata={raceMetadata} currentLap={currentLap} replayMode={replayMode} />
 				<WhatIfPanel

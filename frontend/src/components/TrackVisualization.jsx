@@ -21,11 +21,19 @@ export default function TrackVisualization({ metadata, currentLap, replayMode })
 	const p2 = projected ? null : lapState(metadata?.p2_lap_states, currentLap);
 	const previousP1 = projected ? null : lapState(metadata?.p1_lap_states, currentLap - 1);
 	const previousP2 = projected ? null : lapState(metadata?.p2_lap_states, currentLap - 1);
-	const gap = Math.abs((p2?.gap_to_leader_seconds || 0) - (p1?.gap_to_leader_seconds || 0));
-	const previousGap = Math.abs((previousP2?.gap_to_leader_seconds || 0) - (previousP1?.gap_to_leader_seconds || 0));
-	const delta = gap - previousGap;
-	const hasGap = p1?.gap_to_leader_seconds != null && p2?.gap_to_leader_seconds != null;
-	const trend = delta < 0 ? "↓ closing" : delta > 0 ? "↑ opening" : "→ stable";
+	const gap = p2?.gap_to_leader_seconds ?? (
+		p1?.gap_to_leader_seconds != null && p2?.gap_to_leader_seconds != null
+			? Math.abs(p2.gap_to_leader_seconds - p1.gap_to_leader_seconds)
+			: null
+	);
+	const previousGap = previousP2?.gap_to_leader_seconds ?? (
+		previousP1?.gap_to_leader_seconds != null && previousP2?.gap_to_leader_seconds != null
+			? Math.abs(previousP2.gap_to_leader_seconds - previousP1.gap_to_leader_seconds)
+			: null
+	);
+	const delta = gap != null && previousGap != null ? gap - previousGap : null;
+	const hasGap = gap != null;
+	const trend = delta == null ? "trend unavailable" : delta < 0 ? "↓ closing" : delta > 0 ? "↑ opening" : "→ stable";
 	const p1Pit = pitState(metadata?.p1_pit_stops, currentLap);
 	const p2Pit = pitState(metadata?.p2_pit_stops, currentLap);
 	const dataClass = projected ? "data-projected" : "data-historical";
@@ -57,7 +65,7 @@ export default function TrackVisualization({ metadata, currentLap, replayMode })
 				<div className="gap-readout">
 					<div className="panel-label">GAP BETWEEN P1 / P2</div>
 					<strong>{hasGap ? `${gap.toFixed(2)}s` : "Unavailable"}</strong>
-					<span>{hasGap ? `${trend} | ${Math.abs(delta).toFixed(2)}s/lap` : "Recorded gap data unavailable"}</span>
+					<span>{hasGap ? `${trend}${delta == null ? "" : ` | ${Math.abs(delta).toFixed(2)}s/lap`}` : "Recorded gap data unavailable"}</span>
 					<div className="pit-status-list">
 						<div><span>P1 status</span><StatusBadge tone={p1Pit === "IN PIT LANE" ? "projected" : "historical"}>{p1Pit}</StatusBadge></div>
 						<div><span>P2 status</span><StatusBadge tone={p2Pit === "IN PIT LANE" ? "projected" : "historical"}>{p2Pit}</StatusBadge></div>

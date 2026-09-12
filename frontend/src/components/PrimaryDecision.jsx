@@ -4,6 +4,12 @@ function actionLabel(action) {
 	return action === "pit_now" ? "PIT NOW" : action === "extend_stint" ? "EXTEND" : "STAY OUT";
 }
 
+function formatConfidence(confidence) {
+	const low = Math.min(confidence.lower, confidence.upper);
+	const high = Math.max(confidence.lower, confidence.upper);
+	return `${Math.round(low * 100)}–${Math.round(high * 100)}%`;
+}
+
 export default function PrimaryDecision({ recommendation, currentLap, replayMode, isUpdating, onAction }) {
 	if (!recommendation) return null;
 	const { explainability: factors, confidence } = recommendation;
@@ -23,7 +29,7 @@ export default function PrimaryDecision({ recommendation, currentLap, replayMode
 				<StatusBadge tone="neutral">{recommendation.undercut_risk_tier.toUpperCase()}</StatusBadge>
 			</div>
 			<div className="decision-target">Target: Lap {recommendation.pit_lap}</div>
-			<div className="decision-confidence">Confidence: {Math.round(confidence.lower * 100)}–{Math.round(confidence.upper * 100)}%</div>
+			<div className="decision-confidence">Confidence: {formatConfidence(confidence)}</div>
 			<p className="decision-why"><strong>Why:</strong> {sentence}</p>
 			<div className="decision-options">
 				<button className="decision-action decision-action-primary" onClick={() => onAction("PIT")} type="button">ACCEPT PIT</button>
