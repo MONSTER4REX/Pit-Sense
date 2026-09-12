@@ -62,3 +62,23 @@ def test_counterfactual_reoptimizes_at_next_review_lap() -> None:
 	assert review.next_review_lap is not None
 	assert [record.lap for record in engine.decision_history] == [2, 4]
 	assert second.decision_lap == 4
+
+
+def test_pit_status_uses_historical_and_projected_lap_phases() -> None:
+	historical = normalize_race(
+		year=2024,
+		event_name="Test Grand Prix",
+		session_name="R",
+		driver="P1DRV",
+		total_laps=6,
+		lap_rows=[{"LapNumber": lap, "LapTime": 90.0, "Compound": "MEDIUM", "Position": 1} for lap in range(1, 7)],
+		pit_rows=[{"Lap": 3, "PitDuration": 22.0}],
+	)
+	other = _race("P2DRV", 2, 4.0)
+	engine = SimulationEngine(historical, other)
+
+	assert engine.tick(3).cars[0].pit_status == "PIT_IN"
+	assert engine.tick(4).cars[0].pit_status == "PIT_OUT"
+	engine.inject_shock(2, ShockEventType.SAFETY_CAR)
+	engine.accept_decision(2, "PIT")
+	assert engine.tick(4).cars[1].pit_status == "PIT_IN"

@@ -34,6 +34,8 @@ class SimulationEngine:
 		previous = [item for item in race.laps if item.lap_number <= lap and item.compound]
 		compound = row.compound if row and row.compound else (previous[-1].compound if previous else "UNKNOWN")
 		tyre_age = row.tyre_life if row and row.tyre_life is not None else max(0, lap - (previous[-1].lap_number if previous else 1))
+		pit_laps = {stop.lap_number for stop in race.pit_stops}
+		pit_status = "PIT_IN" if lap in pit_laps else "PIT_OUT" if lap - 1 in pit_laps else "NONE"
 		return CarSimulationState(
 			car=car,
 			driver=race.driver,
@@ -44,7 +46,20 @@ class SimulationEngine:
 			position=row.position if row and row.position else (1 if car == "P1" else 2),
 			gap_to_leader_seconds=(row.gap_to_leader_seconds or 0.0) if row else 0.0,
 			lap_time_seconds=row.lap_time_seconds if row else None,
+			pit_status=pit_status,
 		)
+
+	@staticmethod
+	def _projected_pit_status(lap: int, pit_lap: int | None) -> str:
+		if pit_lap is None:
+			return "NONE"
+		if lap == pit_lap:
+			return "PIT_IN"
+		if lap == pit_lap + 1:
+			return "PIT_STOP"
+		if lap == pit_lap + 2:
+			return "PIT_OUT"
+		return "NONE"
 
 	def _pitsense_decision(self, car: CarSimulationState, lap: int) -> StrategyDecision:
 		lap_times = [item.lap_time_seconds for item in self.p2.laps if item.lap_time_seconds is not None]
@@ -120,7 +135,13 @@ class SimulationEngine:
 		p2.tyre_age = age_since_fork + 8
 		baseline = baseline_decision(car=p1, end_lap=self.end_lap, shock_event=self.shock_event.value if self.shock_event else None, pit_lane_loss_seconds=self.pit_lane_loss_seconds)
 		pitsense = self._pitsense_decision(p2, lap)
-		if self.user_action and self.next_review_lap and lap < self.next_review_lap:
+		if self.user_action == "PIT" and self.next_review_lap and lap <= self.next_review_lap:
+			pitsense = pitsense.model_copy(update={
+				"action": "PIT",
+				"target_lap": self.next_review_lap,
+				"explanation": f"User selected PIT; pit opportunity is scheduled for Lap {self.next_review_lap}.",
+			})
+		elif self.user_action and self.next_review_lap and lap < self.next_review_lap:
 			pitsense = pitsense.model_copy(update={
 				"action": self.user_action,
 				"target_lap": self.next_review_lap,
@@ -133,10 +154,10 @@ class SimulationEngine:
 		p2.mode = "PROJECTED"
 		if baseline.action == "PIT":
 			p1.position = max(1, p1.position - 1)
-			p1.pit_status = "PIT_IN" if lap == self.fork_lap else "PIT_OUT"
+			p1.pit_status = self._projected_pit_status(lap, baseline.target_lap)
 		if pitsense.action == "PIT":
 			p2.position = max(1, p2.position - 1)
-			p2.pit_status = "PIT_IN" if lap == self.fork_lap else "PIT_OUT"
+			p2.pit_status = self._projected_pit_status(lap, pitsense.target_lap)
 		if self.user_action == "PIT":
 			# The counterfactual uses a documented deterministic approximation:
 			# PitSense closes faster against a stay-out baseline, and still has a
