@@ -6,7 +6,7 @@ import { useCallback, useRef, useState } from "react";
 // backend feature), we reconnect with a lap-times slice whenever the user
 // pauses, scrubs, or changes speed, and reconstruct the true lap number
 // client-side since the server always numbers ticks from 1 within the slice.
-export function useTickStream({ lapTimes, startLap = 1, startTyreAge = 12, onTick }) {
+export function useTickStream({ lapTimes, startLap = 1, startTyreAge = 12, onTick, simulation = false, onSimulationTick }) {
 	const socketRef = useRef(null);
 	const lapIndexRef = useRef(0);
 	const onTickRef = useRef(onTick);
@@ -42,6 +42,7 @@ export function useTickStream({ lapTimes, startLap = 1, startTyreAge = 12, onTic
 						lap_times: lapTimes.slice(lapIndex),
 						start_lap: startLap + lapIndex,
 						start_tyre_age: startTyreAge + lapIndex,
+						simulation,
 					}),
 				);
 				setIsPlaying(true);
@@ -49,21 +50,23 @@ export function useTickStream({ lapTimes, startLap = 1, startTyreAge = 12, onTic
 			socket.onmessage = (messageEvent) => {
 				const payload = JSON.parse(messageEvent.data);
 				if (payload.type === "tick") {
-					const trueLapNumber = payload.lap_number;
-					lapIndexRef.current = trueLapNumber - startLap;
-					const tickData = {
-						lapNumber: trueLapNumber,
-						timestampSeconds: payload.timestamp_seconds,
-						lapTimeSeconds: payload.lap_time_seconds,
-						rivalCoverStopProbability: payload.rival_cover_stop_probability,
-						trafficRejoinRisk: payload.traffic_rejoin_risk,
-						tyreAge: payload.tyre_age,
-						distanceToDriverAhead: payload.distance_to_driver_ahead,
-					};
-					setCurrentTick(tickData);
-					if (onTickRef.current) {
-						onTickRef.current(tickData);
-					}
+						if (simulation) onSimulationTick?.(payload);
+						const trueLapNumber = simulation ? payload.lap : payload.lap_number;
+						lapIndexRef.current = trueLapNumber - startLap;
+						const p2 = simulation ? payload.cars?.find((car) => car.car === "P2") : null;
+						const tickData = {
+							lapNumber: trueLapNumber,
+							timestampSeconds: payload.timestamp_seconds ?? 0,
+							lapTimeSeconds: payload.lap_time_seconds ?? p2?.lap_time_seconds ?? null,
+							rivalCoverStopProbability: payload.rival_cover_stop_probability,
+							trafficRejoinRisk: payload.traffic_rejoin_risk,
+							tyreAge: payload.tyre_age ?? p2?.tyre_age,
+							distanceToDriverAhead: payload.distance_to_driver_ahead,
+							mode: payload.mode ?? "HISTORICAL",
+							decisions: payload.decisions ?? [],
+						};
+						setCurrentTick(tickData);
+						if (onTickRef.current && !simulation) onTickRef.current(tickData);
 				} else if (payload.type === "complete") {
 					setComplete(true);
 					setIsPlaying(false);
@@ -75,7 +78,7 @@ export function useTickStream({ lapTimes, startLap = 1, startTyreAge = 12, onTic
 			socket.onerror = () => setError("WebSocket connection error");
 			socket.onclose = () => setIsPlaying(false);
 		},
-		[closeSocket, lapTimes, startLap, startTyreAge],
+		[closeSocket, lapTimes, onSimulationTick, simulation, startLap, startTyreAge],
 	);
 
 	const play = useCallback(() => connect(lapIndexRef.current, speed), [connect, speed]);

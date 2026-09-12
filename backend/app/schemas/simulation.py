@@ -1,0 +1,66 @@
+from __future__ import annotations
+
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, Field
+
+from app.schemas.recommendation import StrategyRecommendation
+
+
+SimulationMode = Literal["HISTORICAL", "PROJECTED"]
+CarRole = Literal["P1", "P2"]
+ModelType = Literal["PITSENSE", "BASELINE"]
+SimulationAction = Literal["PIT", "STAY_OUT", "EXTEND"]
+
+
+class StrategyDecision(BaseModel):
+	model_config = ConfigDict(extra="forbid")
+
+	car: CarRole
+	lap: int = Field(ge=1)
+	action: SimulationAction
+	target_lap: int = Field(ge=1)
+	confidence: float | None = Field(default=None, ge=0, le=1)
+	projected_time_cost: float = Field(ge=0)
+	projected_position: int = Field(ge=1)
+	explanation: str = Field(min_length=1)
+	model_type: ModelType
+	recommendation: StrategyRecommendation | None = None
+
+
+class CarSimulationState(BaseModel):
+	model_config = ConfigDict(extra="forbid")
+
+	car: CarRole
+	driver: str
+	lap: int = Field(ge=1)
+	mode: SimulationMode
+	compound: str | None = None
+	tyre_age: int = Field(ge=0)
+	position: int = Field(ge=1)
+	gap_to_leader_seconds: float = Field(ge=0)
+	lap_time_seconds: float | None = Field(default=None, gt=0)
+	pit_status: Literal["NONE", "PIT_IN", "PIT_STOP", "PIT_OUT"] = "NONE"
+
+
+class SimulationTick(BaseModel):
+	model_config = ConfigDict(extra="forbid")
+
+	lap: int = Field(ge=1)
+	mode: SimulationMode
+	scenario_id: str
+	shock_event: str | None = None
+	cars: list[CarSimulationState] = Field(min_length=2)
+	decisions: list[StrategyDecision] = Field(default_factory=list)
+
+
+class CounterfactualSummary(BaseModel):
+	model_config = ConfigDict(extra="forbid")
+
+	historical_finish: dict[CarRole, int]
+	pitsense_projected_finish: int = Field(ge=1)
+	baseline_projected_finish: int = Field(ge=1)
+	projected_finishing_gap_seconds: float = Field(ge=0)
+	projected_gain_loss_vs_historical: int
+	assumptions: list[str] = Field(min_length=1)
+	historical_vs_projected: Literal["COUNTERFACTUAL_PROJECTION"] = "COUNTERFACTUAL_PROJECTION"
