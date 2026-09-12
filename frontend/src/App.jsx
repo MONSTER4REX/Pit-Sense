@@ -259,6 +259,14 @@ export default function App() {
 	const handleSimulationTick = useCallback((tick) => {
 		recordProjectedTick(tick);
 		setCurrentLap(tick.lap);
+		const p2 = tick.cars?.find((car) => car.car === "P2");
+		const pitsenseDecision = tick.decisions?.find((decision) => decision.car === "P2");
+		if (p2?.tyre_age != null) setCurrentTyreAge(p2.tyre_age);
+		if (pitsenseDecision?.recommendation) {
+			setRecommendation(pitsenseDecision.recommendation);
+			setRecommendationPending(false);
+			setReoptStatus("synced");
+		}
 	}, [recordProjectedTick, setCurrentLap]);
 
 	const triggerShockEvent = async (requestedEventType) => {
