@@ -1,15 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import ExplainabilityChart from "./components/ExplainabilityChart";
-import UndercutRiskTier from "./components/UndercutRiskTier";
 import WhatIfPanel from "./components/WhatIfPanel";
 import StrategyTimeline from "./components/StrategyTimeline";
 import ReplayControls from "./components/ReplayControls";
-import { fetchRecommendation, fetchTimeline, injectShockEvent } from "./api";
+import AppHeader from "./components/AppHeader";
+import PrimaryDecision from "./components/PrimaryDecision";
+import RaceCarPanels from "./components/RaceCarPanels";
+import { fetchAvailableRaces, fetchRecommendation, fetchTimeline, injectShockEvent, loadRaceSession } from "./api";
+import { useSimulation } from "./state/SimulationContext";
 
 const LAP_TIME_SECONDS = Array.from({ length: 30 }, (_, index) => 92.4 + Math.sin(index / 3) * 1.6);
 
 const BASE_CONFIG = {
-	end_lap: 44,
 	current_compound: "MEDIUM",
 };
 
@@ -20,20 +22,66 @@ const SHOCK_CYCLE = ["safety_car", "rain", "vsc", "puncture"];
 const REOPT_BUDGET_MS = 1000;
 
 export default function App() {
+	const {
+		selectedRace,
+		currentLap,
+		totalLaps,
+		raceMetadata,
+		selectRace,
+		setRaceMetadata,
+		setCurrentLap,
+		resetSimulation,
+		replayMode,
+		acceptCounterfactual,
+	} = useSimulation();
+	const [races, setRaces] = useState([]);
+	const [raceLoading, setRaceLoading] = useState(true);
+	const [replayInstanceKey, setReplayInstanceKey] = useState(0);
 	const [recommendation, setRecommendation] = useState(null);
+	const [recommendationPending, setRecommendationPending] = useState(false);
 	const [loadError, setLoadError] = useState(null);
 	const [reoptStatus, setReoptStatus] = useState("loading"); // loading | synced | recomputing | stale_timeout | error
 	const [reoptError, setReoptError] = useState(null);
-	const [currentLap, setCurrentLap] = useState(17);
-	const [currentTyreAge, setCurrentTyreAge] = useState(12);
+	const [currentTyreAge, setCurrentTyreAge] = useState(0);
+	const [currentGap, setCurrentGap] = useState(null);
 	const [uncertaintyEvents, setUncertaintyEvents] = useState([]);
 	const [timelineEvents, setTimelineEvents] = useState([]);
 	const [timelineLoading, setTimelineLoading] = useState(true);
 	const [timelineError, setTimelineError] = useState(null);
 	
-	const currentLapRef = useRef(17);
-	const currentTyreAgeRef = useRef(12);
+	const currentLapRef = useRef(1);
+	const currentTyreAgeRef = useRef(0);
 	const shockIndexRef = useRef(0);
+	const tickRequestRef = useRef(0);
+
+	const resetRaceData = useCallback(() => {
+		setRecommendation(null);
+		setRecommendationPending(false);
+		setLoadError(null);
+		setReoptStatus("loading");
+		setReoptError(null);
+		setCurrentTyreAge(0);
+		setCurrentGap(null);
+		setUncertaintyEvents([]);
+		setTimelineEvents([]);
+		setTimelineLoading(true);
+		setTimelineError(null);
+		currentLapRef.current = 1;
+		currentTyreAgeRef.current = 0;
+		shockIndexRef.current = 0;
+		setReplayInstanceKey((key) => key + 1);
+	}, []);
+
+	const handleRaceChange = useCallback((race) => {
+		resetRaceData();
+		selectRace(race);
+	}, [resetRaceData, selectRace]);
+
+	const handleReset = useCallback(() => {
+		resetRaceData();
+		resetSimulation();
+		setCurrentLap(1);
+	}, [resetRaceData, resetSimulation, setCurrentLap]);
 
 	const refreshTimeline = async () => {
 		try {
@@ -48,26 +96,68 @@ export default function App() {
 	};
 
 	useEffect(() => {
+		let cancelled = false;
+		fetchAvailableRaces()
+			.then((availableRaces) => {
+				if (!cancelled) {
+					setRaces(availableRaces);
+					if (availableRaces[0]) handleRaceChange(availableRaces[0]);
+				}
+			})
+			.catch((err) => {
+				if (!cancelled) {
+					setLoadError(err.message);
+					setRaceLoading(false);
+				}
+			});
+		return () => { cancelled = true; };
+	}, [handleRaceChange]);
+
+	useEffect(() => {
+		if (!selectedRace) return undefined;
+		const controller = new AbortController();
+		setRaceLoading(true);
+		loadRaceSession(selectedRace.year, selectedRace.event, controller.signal)
+			.then((metadata) => {
+				setRaceMetadata(metadata);
+				setRaceLoading(false);
+			})
+			.catch((err) => {
+				if (err.name !== "AbortError") {
+					setLoadError(err.message);
+					setRaceLoading(false);
+				}
+			});
+		return () => controller.abort();
+	}, [selectedRace, setRaceMetadata]);
+
+	useEffect(() => {
+		if (!selectedRace || !totalLaps) return undefined;
+		const endLap = totalLaps;
+		const controller = new AbortController();
 		fetchRecommendation({
 			...BASE_CONFIG,
-			start_lap: currentLap,
+			end_lap: endLap,
+			start_lap: 1,
 			current_tyre_age: currentTyreAge,
 			lap_time_seconds: LAP_TIME_SECONDS,
 			uncertainty_events: [],
 			rival_cover_stop_probability: 0.0,
-		})
+		}, controller.signal)
 			.then((data) => {
+				if (controller.signal.aborted) return;
 				setRecommendation(data);
+				setRecommendationPending(false);
 				setReoptStatus("synced");
 			})
 			.catch((err) => {
+				if (err.name === "AbortError") return;
 				setLoadError(err.message);
 				setReoptStatus("error");
 			});
 		refreshTimeline();
-		// Load once on mount; the shock flow below owns all subsequent refreshes.
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, []);
+		return () => controller.abort();
+	}, [selectedRace, totalLaps]);
 
 	const handleTick = useCallback((tick) => {
 		currentLapRef.current = tick.lapNumber;
@@ -76,7 +166,37 @@ export default function App() {
 			currentTyreAgeRef.current = tick.tyreAge;
 			setCurrentTyreAge(tick.tyreAge);
 		}
-	}, []);
+		if (tick.distanceToDriverAhead !== undefined) setCurrentGap(tick.distanceToDriverAhead);
+		if (!totalLaps) return;
+		const requestId = ++tickRequestRef.current;
+		setRecommendationPending(true);
+		fetchRecommendation({
+			...BASE_CONFIG,
+			end_lap: totalLaps,
+			start_lap: Math.min(tick.lapNumber, totalLaps - 1),
+			current_tyre_age: tick.tyreAge ?? currentTyreAgeRef.current,
+			lap_time_seconds: LAP_TIME_SECONDS,
+			uncertainty_events: uncertaintyEvents,
+			rival_cover_stop_probability: 0.0,
+		})
+			.then((fresh) => {
+				if (requestId === tickRequestRef.current) {
+					setRecommendation(fresh);
+					setRecommendationPending(false);
+				}
+			})
+			.catch((err) => {
+				if (requestId === tickRequestRef.current) {
+					setReoptError(err.message);
+					setRecommendationPending(false);
+				}
+			});
+	}, [currentTyreAgeRef, setCurrentLap, totalLaps, uncertaintyEvents]);
+
+	const handleDecision = useCallback((action) => {
+		acceptCounterfactual(currentLap, action);
+		console.info(`[PitSense] Counterfactual transition accepted at Lap ${currentLap}: ${action}`);
+	}, [acceptCounterfactual, currentLap]);
 
 	const triggerShockEvent = async () => {
 		if (reoptStatus === "recomputing") return; // one re-optimization in flight at a time
@@ -99,6 +219,7 @@ export default function App() {
 			const nextTyreAge = currentTyreAgeRef.current + 1;
 			const fresh = await fetchRecommendation({
 				...BASE_CONFIG,
+				end_lap: totalLaps,
 				start_lap: nextLap,
 				current_tyre_age: nextTyreAge,
 				lap_time_seconds: LAP_TIME_SECONDS,
@@ -131,9 +252,12 @@ export default function App() {
 		error: "RE-OPTIMIZATION FAILED",
 	}[reoptStatus];
 
+	const header = <AppHeader races={races} onRaceChange={handleRaceChange} onReset={handleReset} />;
+
 	if (loadError && !recommendation) {
 		return (
 			<main className="console-shell">
+				{header}
 				<p className="error-note">Failed to load initial recommendation: {loadError}</p>
 			</main>
 		);
@@ -141,6 +265,7 @@ export default function App() {
 	if (!recommendation) {
 		return (
 			<main className="console-shell">
+				{header}
 				<p className="data-note">Loading strategy console…</p>
 			</main>
 		);
@@ -148,36 +273,30 @@ export default function App() {
 
 	return (
 		<main className="console-shell">
+			{header}
 			<header className="topbar">
 				<div><p className="eyebrow">PITSENSE / STRATEGY CONSOLE</p><h1>Race strategy, with its work shown.</h1></div>
-				<div className="mode-badge">HISTORICAL REPLAY ONLY</div>
+				<div className="mode-badge">HISTORICAL REPLAY</div>
 			</header>
 			<section className="status-strip">
-				<span><i className="live-dot" /> 2024 Belgian Grand Prix / Lap {currentLap} of {BASE_CONFIG.end_lap}</span>
-				<span>{BASE_CONFIG.current_compound} / {currentTyreAge} laps</span>
+				<span><i className="live-dot" /> {selectedRace?.year} {selectedRace?.event} / Lap {currentLap} of {totalLaps}</span>
+				<span>{currentTyreAge ? `${BASE_CONFIG.current_compound} / ${currentTyreAge} laps` : "Tyre state not yet observed"}</span>
 				<span className={`status-${reoptStatus}`}>{statusLabel}</span>
 			</section>
 			{reoptError && <p className="error-note">Re-optimization error: {reoptError}</p>}
-			<section className="workspace-grid">
+			<RaceCarPanels
+				metadata={raceMetadata}
+				replayMode={replayMode}
+				recommendation={recommendation}
+				isUpdating={recommendationPending}
+				currentLap={currentLap}
+				currentTyreAge={currentTyreAge}
+				currentGap={currentGap}
+			/>
+			{recommendation && <PrimaryDecision recommendation={recommendation} currentLap={currentLap} replayMode={replayMode} isUpdating={recommendationPending} onAction={handleDecision} />}
+			<section className="workspace-grid" id="comparison">
 				<article className="panel recommendation-panel">
-					<div className="panel-label">PRIMARY RECOMMENDATION</div>
-					<div className="recommendation-action">
-						<span>
-							{recommendation.action === "stay_out" 
-								? "STAY OUT" 
-								: recommendation.pit_lap > currentLap 
-									? `BOX ON LAP ${recommendation.pit_lap}` 
-									: "BOX THIS LAP"}
-						</span>
-						<strong>LAP {recommendation.pit_lap}</strong>
-					</div>
-					<UndercutRiskTier tier={recommendation.undercut_risk_tier} />
-					<p className="recommendation-copy">The shortest projected race-time path currently favors this action before the rival cover window closes.</p>
-					<div className="confidence">
-						<span>Confidence band</span>
-						<strong>{Math.round(recommendation.confidence.lower * 100)}–{Math.round(recommendation.confidence.upper * 100)}%</strong>
-						<em>{recommendation.confidence.uncertainty} uncertainty</em>
-					</div>
+					<div className="panel-label">REPLAY ACTIONS</div>
 					<button className="shock-button" onClick={triggerShockEvent} disabled={reoptStatus === "recomputing"}>
 						Inject Shock Event
 					</button>
@@ -186,7 +305,7 @@ export default function App() {
 				<article className="panel explainability-panel">
 					<div className="panel-label">WHY THIS PATH</div>
 					<h2>Explainability breakdown</h2>
-					<ExplainabilityChart explainability={recommendation.explainability} />
+					{recommendationPending ? <p className="data-note">Recalculating from the current replay tick…</p> : <ExplainabilityChart explainability={recommendation.explainability} />}
 					<p className="data-note">Factors are calculated from the loaded historical session. Missing source fields are flagged, never interpolated.</p>
 				</article>
 				<article className="panel map-panel">
@@ -218,7 +337,8 @@ export default function App() {
 				<WhatIfPanel
 					request={{
 						...BASE_CONFIG,
-						start_lap: currentLap,
+					end_lap: totalLaps,
+					start_lap: currentLap,
 						current_tyre_age: currentTyreAge,
 						lap_time_seconds: LAP_TIME_SECONDS,
 						uncertainty_events: uncertaintyEvents,
@@ -226,9 +346,10 @@ export default function App() {
 					}}
 				/>
 				<ReplayControls
+					key={replayInstanceKey}
 					lapTimes={LAP_TIME_SECONDS}
-					startLap={17}
-					startTyreAge={12}
+					startLap={1}
+					startTyreAge={0}
 					onTick={handleTick}
 				/>
 				<StrategyTimeline events={timelineEvents} loading={timelineLoading} error={timelineError} currentLap={currentLap} />

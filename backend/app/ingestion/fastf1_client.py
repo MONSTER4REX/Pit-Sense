@@ -16,6 +16,10 @@ class HistoricalSession:
 	p1: RaceState
 	p2: RaceState
 	historical_events: list[dict[str, str]]
+	p1_name: str
+	p1_team: str
+	p2_name: str
+	p2_team: str
 
 
 def load_historical_race(
@@ -70,7 +74,9 @@ def load_historical_session(
 	except ImportError as exc:
 		raise RuntimeError("FastF1 is required to load historical sessions") from exc
 
-	fastf1.Cache.enable_cache(cache_dir or str(DEFAULT_CACHE_DIR))
+	cache_path = Path(cache_dir) if cache_dir else DEFAULT_CACHE_DIR
+	cache_path.mkdir(parents=True, exist_ok=True)
+	fastf1.Cache.enable_cache(str(cache_path))
 	session = fastf1.get_session(year, event_name, session_name)
 	session.load(telemetry=False, weather=False, messages=True)
 	results = session.results.sort_values("Position")
@@ -96,6 +102,12 @@ def load_historical_session(
 			total_laps=int(session.total_laps) if session.total_laps is not None else None,
 		)
 
+	def result_text(row, field: str, fallback_field: str) -> str:
+		value = row.get(field)
+		if value is None or str(value).lower() == "nan":
+			value = row.get(fallback_field)
+		return str(value)
+
 	events = [
 		{"message": " ".join(str(row.get(column, "")) for column in ("Category", "Message")).strip()}
 		for _, row in session.race_control_messages.iterrows()
@@ -104,4 +116,8 @@ def load_historical_session(
 		p1=load_driver(str(finishers.iloc[0]["Abbreviation"])),
 		p2=load_driver(str(finishers.iloc[1]["Abbreviation"])),
 		historical_events=events,
+		p1_name=result_text(finishers.iloc[0], "FullName", "Abbreviation"),
+		p1_team=result_text(finishers.iloc[0], "TeamName", "Team"),
+		p2_name=result_text(finishers.iloc[1], "FullName", "Abbreviation"),
+		p2_team=result_text(finishers.iloc[1], "TeamName", "Team"),
 	)
