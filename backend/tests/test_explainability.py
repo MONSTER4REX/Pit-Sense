@@ -1,8 +1,21 @@
 import pytest
+import app.replay.fastf1_live as fastf1_live
 from app.engine.reoptimizer import optimize_strategy
 from app.rival_model.cover_stop import cover_stop_probability
 from app.rival_model.rejoin_traffic import calculate_traffic_penalty
 from app.replay.tick_stream import replay_ticks
+
+
+def test_live_fastf1_enrichment_falls_back_when_session_is_unavailable(monkeypatch: pytest.MonkeyPatch) -> None:
+    def unavailable_session() -> object:
+        raise RuntimeError("FastF1 cache is unavailable")
+
+    monkeypatch.setattr(fastf1_live, "get_fastf1_session", unavailable_session)
+
+    result = fastf1_live.extract_lap_dynamic_data(17)
+
+    assert result["rival_tyre_age"] == 0
+    assert result["gaps_to_ahead"] == []
 
 
 def test_traffic_rejoin_risk_is_computed_and_nonzero() -> None:

@@ -33,7 +33,16 @@ def extract_lap_dynamic_data(lap_number: int, main_driver: str = 'NOR', rival_dr
     - Rival tyre age
     - Gaps to cars ahead (for traffic penalty)
     """
-    session = get_fastf1_session()
+    try:
+        session = get_fastf1_session()
+    except Exception as exc:
+        logger.warning("FastF1 live enrichment unavailable for lap %s: %s", lap_number, exc)
+        return {
+            'rival_tyre_age': 0,
+            'distance_to_driver_ahead': 0.0,
+            'gaps_to_ahead': [],
+            'pit_time_loss': 22.0,
+        }
     laps = session.laps
     
     # 1. Rival Tyre Age
