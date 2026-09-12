@@ -13,6 +13,7 @@ import ForkTransition from "./components/ForkTransition";
 import DualLayerTimeline from "./components/DualLayerTimeline";
 import PostDecisionImpact from "./components/PostDecisionImpact";
 import FinalResult from "./components/FinalResult";
+import HeadToHead from "./components/HeadToHead";
 import { acceptSimulationDecision, fetchAvailableRaces, fetchCounterfactualSummary, fetchRecommendation, fetchTimeline, injectShockEvent, loadRaceSession } from "./api";
 import { useSimulation } from "./state/SimulationContext";
 
@@ -344,6 +345,15 @@ export default function App() {
 			{replayMode === "counterfactual" && <CounterfactualSimulation forkLap={forkLap} currentLap={currentLap} projectedTicks={projectedTicks} />}
 			{replayMode === "counterfactual" && <PostDecisionImpact forkLap={forkLap} acceptedAction={acceptedAction} historicalLap={historicalPitLap} historicalTick={historicalTick} projectedTick={projectedTick} />}
 			<FinalResult summary={counterfactualSummary} visible={projectedFinished} />
+			<HeadToHead
+				replayMode={replayMode}
+				completed={projectedFinished}
+				totalLaps={totalLaps}
+				forkLap={forkLap}
+				raceMetadata={raceMetadata}
+				projectedTicks={projectedTicks}
+				summary={counterfactualSummary}
+			/>
 			<section className="decision-layout">
 				<RaceCarPanels
 					metadata={raceMetadata}
