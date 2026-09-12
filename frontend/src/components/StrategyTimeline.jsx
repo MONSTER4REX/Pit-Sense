@@ -7,7 +7,7 @@ function formatTimestamp(isoString) {
 }
 
 export default function StrategyTimeline({ events, loading, error, currentLap = 17 }) {
-	const pastEvents = (events ?? []).filter(e => e.lap_number < currentLap);
+	const pastEvents = (events ?? []).filter(e => e.lap_number <= currentLap);
 	
 	return (
 		<article className="panel timeline-panel">

@@ -3,7 +3,7 @@ import { REPLAY_MODES, useSimulation } from "../state/SimulationContext";
 
 const SPEEDS = [1, 2, 5];
 
-export default function AppHeader({ races, onRaceChange, onReset }) {
+export default function AppHeader({ races, onRaceChange, onReset, isPlaying, onPlayToggle }) {
 	const { replayMode, forkLap, currentLap, totalLaps, selectedRace, speed, setSpeed } = useSimulation();
 	const isCounterfactual = replayMode === REPLAY_MODES.COUNTERFACTUAL;
 
@@ -36,6 +36,15 @@ export default function AppHeader({ races, onRaceChange, onReset }) {
 				<StatusBadge tone={isCounterfactual ? "projected" : "historical"}>
 					● {isCounterfactual ? "COUNTERFACTUAL — PROJECTED" : "HISTORICAL REPLAY"}
 				</StatusBadge>
+				<button
+					className="play-button"
+					onClick={onPlayToggle}
+					disabled={!totalLaps}
+					type="button"
+					aria-label={isPlaying ? "Pause race replay" : "Play race replay"}
+				>
+					{isPlaying ? "PAUSE" : "PLAY"}
+				</button>
 				<div className="speed-controls" aria-label="Playback speed">
 					{SPEEDS.map((candidate) => (
 						<button

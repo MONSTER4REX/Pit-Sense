@@ -18,10 +18,8 @@ import TyreDegradationView from "./components/TyreDegradationView";
 import { acceptSimulationDecision, fetchAvailableRaces, fetchCounterfactualSummary, fetchRecommendation, fetchTimeline, injectShockEvent, loadRaceSession } from "./api";
 import { useSimulation } from "./state/SimulationContext";
 
-const LAP_TIME_SECONDS = Array.from({ length: 30 }, (_, index) => 92.4 + Math.sin(index / 3) * 1.6);
-
 const BASE_CONFIG = {
-	current_compound: "MEDIUM",
+	current_compound: "UNKNOWN",
 };
 
 // Cycled through so repeated shock injections exercise different uncertainty
@@ -66,11 +64,28 @@ export default function App() {
 	const [timelineEvents, setTimelineEvents] = useState([]);
 	const [timelineLoading, setTimelineLoading] = useState(true);
 	const [timelineError, setTimelineError] = useState(null);
+	const [playback, setPlayback] = useState({ isPlaying: false, play: null, pause: null });
 	
 	const currentLapRef = useRef(1);
 	const currentTyreAgeRef = useRef(0);
 	const shockIndexRef = useRef(0);
 	const tickRequestRef = useRef(0);
+	const strategyLapTimes = useMemo(
+		() => (raceMetadata?.p2_lap_states ?? [])
+			.map((lap) => lap.lap_time_seconds)
+			.filter((lapTime) => lapTime != null),
+		[raceMetadata],
+	);
+	const currentLapState = useMemo(
+		() => (raceMetadata?.p2_lap_states ?? []).find((lap) => lap.lap_number === currentLap)
+			?? (raceMetadata?.p2_lap_states ?? []).filter((lap) => lap.lap_number <= currentLap).at(-1),
+		[raceMetadata, currentLap],
+	);
+	const currentCompound = currentLapState?.compound
+		?? (raceMetadata?.p2_lap_states ?? []).find((lap) => lap.compound)?.compound
+		?? BASE_CONFIG.current_compound;
+	const initialCompound = (raceMetadata?.p2_lap_states ?? []).find((lap) => lap.compound)?.compound
+		?? BASE_CONFIG.current_compound;
 
 	const resetRaceData = useCallback(() => {
 		setRecommendation(null);
@@ -99,6 +114,10 @@ export default function App() {
 		resetSimulation();
 		setCurrentLap(1);
 	}, [resetRaceData, resetSimulation, setCurrentLap]);
+
+	const handlePlaybackStateChange = useCallback((nextPlayback) => {
+		setPlayback(nextPlayback);
+	}, []);
 
 	const refreshTimeline = async () => {
 		try {
@@ -137,6 +156,9 @@ export default function App() {
 		loadRaceSession(selectedRace.year, selectedRace.event, controller.signal)
 			.then((metadata) => {
 				setRaceMetadata(metadata);
+				const initialTyreAge = metadata.p2_lap_states?.find((lap) => lap.lap_number === 1)?.tyre_life ?? 0;
+				currentTyreAgeRef.current = initialTyreAge;
+				setCurrentTyreAge(initialTyreAge);
 				setRaceLoading(false);
 			})
 			.catch((err) => {
@@ -149,15 +171,16 @@ export default function App() {
 	}, [selectedRace, setRaceMetadata]);
 
 	useEffect(() => {
-		if (!selectedRace || !totalLaps) return undefined;
+		if (!selectedRace || !totalLaps || !strategyLapTimes.length) return undefined;
 		const endLap = totalLaps;
 		const controller = new AbortController();
 		fetchRecommendation({
 			...BASE_CONFIG,
+			current_compound: initialCompound,
 			end_lap: endLap,
 			start_lap: 1,
 			current_tyre_age: currentTyreAge,
-			lap_time_seconds: LAP_TIME_SECONDS,
+			lap_time_seconds: strategyLapTimes,
 			uncertainty_events: [],
 			rival_cover_stop_probability: 0.0,
 		}, controller.signal)
@@ -174,24 +197,25 @@ export default function App() {
 			});
 		refreshTimeline();
 		return () => controller.abort();
-	}, [selectedRace, totalLaps]);
+	}, [initialCompound, selectedRace, strategyLapTimes, totalLaps]);
 
 	const handleTick = useCallback((tick) => {
 		currentLapRef.current = tick.lapNumber;
 		setCurrentLap(tick.lapNumber);
-		if (tick.tyreAge !== undefined) {
-			currentTyreAgeRef.current = tick.tyreAge;
-			setCurrentTyreAge(tick.tyreAge);
-		}
+		const observedTyreAge = raceMetadata?.p2_lap_states?.find((lap) => lap.lap_number === tick.lapNumber)?.tyre_life;
+		const tyreAge = observedTyreAge ?? 0;
+		currentTyreAgeRef.current = tyreAge;
+		setCurrentTyreAge(tyreAge);
 		if (!totalLaps) return;
 		const requestId = ++tickRequestRef.current;
 		setRecommendationPending(true);
 		fetchRecommendation({
 			...BASE_CONFIG,
+			current_compound: raceMetadata?.p2_lap_states?.find((lap) => lap.lap_number === tick.lapNumber)?.compound ?? currentCompound,
 			end_lap: totalLaps,
 			start_lap: Math.min(tick.lapNumber, totalLaps - 1),
-			current_tyre_age: tick.tyreAge ?? currentTyreAgeRef.current,
-			lap_time_seconds: LAP_TIME_SECONDS,
+			current_tyre_age: tyreAge,
+			lap_time_seconds: strategyLapTimes,
 			uncertainty_events: uncertaintyEvents,
 			rival_cover_stop_probability: 0.0,
 		})
@@ -207,10 +231,11 @@ export default function App() {
 					setRecommendationPending(false);
 				}
 			});
-	}, [currentTyreAgeRef, setCurrentLap, totalLaps, uncertaintyEvents]);
+	}, [currentCompound, raceMetadata, setCurrentLap, strategyLapTimes, totalLaps, uncertaintyEvents]);
 
 	const handleDecision = useCallback(async (action) => {
 		try {
+			playback.pause?.();
 			const response = await acceptSimulationDecision(action, currentLap);
 			if (!response.tick) throw new Error("Simulation decision returned no projected tick");
 			recordProjectedTick(response.tick);
@@ -221,7 +246,7 @@ export default function App() {
 		} catch (err) {
 			setReoptError(`Counterfactual fork failed: ${err.message}`);
 		}
-	}, [acceptCounterfactual, currentLap, recordProjectedTick, setCounterfactualSummary]);
+	}, [acceptCounterfactual, currentLap, playback, recordProjectedTick, setCounterfactualSummary]);
 
 	const handleSimulationTick = useCallback((tick) => {
 		recordProjectedTick(tick);
@@ -230,6 +255,7 @@ export default function App() {
 
 	const triggerShockEvent = async (requestedEventType) => {
 		if (reoptStatus === "recomputing") return; // one re-optimization in flight at a time
+		playback.pause?.();
 		const eventType = requestedEventType || SHOCK_CYCLE[shockIndexRef.current % SHOCK_CYCLE.length];
 		shockIndexRef.current += 1;
 		setReoptStatus("recomputing");
@@ -249,10 +275,11 @@ export default function App() {
 			const nextTyreAge = currentTyreAgeRef.current;
 			const fresh = await fetchRecommendation({
 				...BASE_CONFIG,
+				current_compound: currentCompound,
 				end_lap: totalLaps,
 				start_lap: nextLap,
 				current_tyre_age: nextTyreAge,
-				lap_time_seconds: LAP_TIME_SECONDS,
+				lap_time_seconds: strategyLapTimes,
 				uncertainty_events: nextEvents,
 				rival_cover_stop_probability: 0.0,
 			});
@@ -288,21 +315,29 @@ export default function App() {
 		error: "RE-OPTIMIZATION FAILED",
 	}[reoptStatus];
 
-	const header = <AppHeader races={races} onRaceChange={handleRaceChange} onReset={handleReset} />;
+	const header = (
+		<AppHeader
+			races={races}
+			onRaceChange={handleRaceChange}
+			onReset={handleReset}
+			isPlaying={playback.isPlaying}
+			onPlayToggle={() => (playback.isPlaying ? playback.pause?.() : playback.play?.())}
+		/>
+	);
 	const whatIfRequest = useMemo(() => ({
 		...BASE_CONFIG,
+		current_compound: currentCompound,
 		end_lap: totalLaps,
 		start_lap: currentLap,
 		current_tyre_age: currentTyreAge,
-		lap_time_seconds: LAP_TIME_SECONDS,
+		lap_time_seconds: strategyLapTimes,
 		uncertainty_events: uncertaintyEvents,
 		rival_cover_stop_probability: 0.0,
-	}), [totalLaps, currentLap, currentTyreAge, uncertaintyEvents]);
+	}), [totalLaps, currentLap, currentTyreAge, currentCompound, strategyLapTimes, uncertaintyEvents]);
 	const historicalLapTimes = useMemo(() => {
-		const recorded = (raceMetadata?.p2_lap_states ?? [])
+		const recorded = [...(raceMetadata?.p2_lap_states ?? [])]
 			.sort((a, b) => a.lap_number - b.lap_number)
-			.map((lap) => lap.lap_time_seconds)
-			.filter((lapTime) => lapTime != null);
+			.map((lap) => lap.lap_time_seconds);
 		return recorded;
 	}, [raceMetadata]);
 	const projectedLapTimes = useMemo(
@@ -351,7 +386,7 @@ export default function App() {
 			</header>
 			<section className="status-strip">
 				<span><i className="live-dot" /> {selectedRace?.year} {selectedRace?.event} / Lap {currentLap} of {totalLaps}</span>
-				<span>{currentTyreAge ? `${BASE_CONFIG.current_compound} / ${currentTyreAge} laps` : "Tyre state not yet observed"}</span>
+				<span>{currentTyreAge ? `${currentCompound} / ${currentTyreAge} laps` : "Tyre state not yet observed"}</span>
 				<span className={`status-${reoptStatus}`}>{statusLabel}</span>
 			</section>
 			{reoptError && <p className="error-note">Re-optimization error: {reoptError}</p>}
@@ -366,7 +401,7 @@ export default function App() {
 				/>
 				{recommendation && <PrimaryDecision recommendation={recommendation} currentLap={currentLap} replayMode={replayMode} isUpdating={recommendationPending} onAction={handleDecision} />}
 			</section>
-			<TrackVisualization metadata={raceMetadata} currentLap={currentLap} replayMode={replayMode} />
+			<TrackVisualization metadata={raceMetadata} currentLap={currentLap} replayMode={replayMode} projectedTicks={projectedTicks} />
 			<section className="assembly-row">
 				<TyreDegradationView currentLap={currentLap} currentTyreAge={currentTyreAge} recommendation={recommendation} />
 				<WhatIfPanel request={whatIfRequest} />
@@ -401,10 +436,12 @@ export default function App() {
 					key={`${replayInstanceKey}-${replayMode}-${forkLap ?? 0}`}
 					lapTimes={replayMode === "counterfactual" ? projectedLapTimes : historicalLapTimes}
 					startLap={replayMode === "counterfactual" ? forkLap : 1}
+					endLap={totalLaps}
 					startTyreAge={0}
 					onTick={handleTick}
 					simulation={replayMode === "counterfactual"}
 					onSimulationTick={handleSimulationTick}
+					onPlaybackStateChange={handlePlaybackStateChange}
 				/>
 			</section>
 			<footer className="footer-line"><span>Replay data: FastF1 cache</span><span>Historical = solid · Projected = dashed</span><span>Data quality: 2 flagged gaps</span></footer>

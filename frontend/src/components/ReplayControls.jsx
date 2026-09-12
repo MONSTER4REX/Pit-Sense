@@ -1,8 +1,9 @@
+import { useEffect } from "react";
 import { useTickStream } from "../hooks/useTickStream";
 
 const SPEEDS = [1, 2, 5];
 
-export default function ReplayControls({ lapTimes, startLap, startTyreAge = 12, onTick, simulation = false, onSimulationTick }) {
+export default function ReplayControls({ lapTimes, startLap, endLap: requestedEndLap, startTyreAge = 0, onTick, simulation = false, onSimulationTick, onPlaybackStateChange }) {
 	const { isPlaying, speed, currentTick, error, complete, play, pause, scrubToLap, changeSpeed } = useTickStream({
 		lapTimes,
 		startLap,
@@ -11,8 +12,17 @@ export default function ReplayControls({ lapTimes, startLap, startTyreAge = 12, 
 		simulation,
 		onSimulationTick,
 	});
-	const endLap = startLap + lapTimes.length - 1;
+	const endLap = requestedEndLap ?? startLap + lapTimes.length - 1;
 	const scrubValue = currentTick?.lapNumber ?? startLap;
+
+	useEffect(() => {
+		onPlaybackStateChange?.({
+			isPlaying,
+			play,
+			pause,
+		});
+		return () => onPlaybackStateChange?.({ isPlaying: false, play: null, pause: null });
+	}, [isPlaying, onPlaybackStateChange, pause, play]);
 
 	return (
 		<article className="panel replay-panel">

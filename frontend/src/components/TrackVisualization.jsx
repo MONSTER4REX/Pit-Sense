@@ -10,15 +10,19 @@ function pitState(stops, lap) {
 }
 
 function markerPosition(car, state, opponentState) {
+	if (state?.position != null && opponentState?.position != null) {
+		return `${car === "P1" ? 52 : Math.max(18, Math.min(82, 52 - (state.position - opponentState.position) * 10))}%`;
+	}
 	const gap = Math.max(0, (state?.gap_to_leader_seconds || 0) - (opponentState?.gap_to_leader_seconds || 0));
 	const base = car === "P1" ? 52 : 52 - Math.min(18, gap * 2);
 	return `${Math.max(18, Math.min(82, base))}%`;
 }
 
-export default function TrackVisualization({ metadata, currentLap, replayMode }) {
+export default function TrackVisualization({ metadata, currentLap, replayMode, projectedTicks = [] }) {
 	const projected = replayMode === REPLAY_MODES.COUNTERFACTUAL;
-	const p1 = projected ? null : lapState(metadata?.p1_lap_states, currentLap);
-	const p2 = projected ? null : lapState(metadata?.p2_lap_states, currentLap);
+	const projectedTick = projected ? projectedTicks.find((tick) => tick.lap === currentLap) ?? projectedTicks.at(-1) : null;
+	const p1 = projected ? projectedTick?.cars?.find((car) => car.car === "P1") : lapState(metadata?.p1_lap_states, currentLap);
+	const p2 = projected ? projectedTick?.cars?.find((car) => car.car === "P2") : lapState(metadata?.p2_lap_states, currentLap);
 	const previousP1 = projected ? null : lapState(metadata?.p1_lap_states, currentLap - 1);
 	const previousP2 = projected ? null : lapState(metadata?.p2_lap_states, currentLap - 1);
 	const gap = p2?.gap_to_leader_seconds ?? (
@@ -34,8 +38,8 @@ export default function TrackVisualization({ metadata, currentLap, replayMode })
 	const delta = gap != null && previousGap != null ? gap - previousGap : null;
 	const hasGap = gap != null;
 	const trend = delta == null ? "trend unavailable" : delta < 0 ? "↓ closing" : delta > 0 ? "↑ opening" : "→ stable";
-	const p1Pit = pitState(metadata?.p1_pit_stops, currentLap);
-	const p2Pit = pitState(metadata?.p2_pit_stops, currentLap);
+	const p1Pit = projected ? (p1?.pit_status ?? "UNAVAILABLE") : pitState(metadata?.p1_pit_stops, currentLap);
+	const p2Pit = projected ? (p2?.pit_status ?? "UNAVAILABLE") : pitState(metadata?.p2_pit_stops, currentLap);
 	const dataClass = projected ? "data-projected" : "data-historical";
 
 	return (
@@ -54,13 +58,13 @@ export default function TrackVisualization({ metadata, currentLap, replayMode })
 				<div className="stylized-track" aria-label="Stylized track with pit lane">
 					<div className="racing-line" />
 					<div className="pit-lane-line"><span>PIT LANE</span></div>
-					{!projected && <div className="track-marker p1-marker" style={{ left: markerPosition("P1", p1, p2) }}>
+					{p1 && <div className="track-marker p1-marker" style={{ left: markerPosition("P1", p1, p2) }}>
 						<span>P1</span>
 					</div>}
-					{!projected && <div className="track-marker p2-marker" style={{ left: markerPosition("P2", p2, p1) }}>
+					{p2 && <div className="track-marker p2-marker" style={{ left: markerPosition("P2", p2, p1) }}>
 						<span>P2</span>
 					</div>}
-					{projected && <div className="track-unavailable">Projected track positions will appear when the counterfactual replay starts.</div>}
+					{projected && !projectedTick && <div className="track-unavailable">Projected track positions will appear when the counterfactual replay starts.</div>}
 				</div>
 				<div className="gap-readout">
 					<div className="panel-label">GAP BETWEEN P1 / P2</div>

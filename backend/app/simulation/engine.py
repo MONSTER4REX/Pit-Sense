@@ -119,11 +119,18 @@ class SimulationEngine:
 		p1.mode = "PROJECTED"
 		p2.mode = "PROJECTED"
 		if baseline.action == "PIT":
-			p1.position += 1
+			p1.position = max(1, p1.position - 1)
 			p1.pit_status = "PIT_IN" if lap == self.fork_lap else "PIT_OUT"
 		if pitsense.action == "PIT":
-			p2.position += 1
+			p2.position = max(1, p2.position - 1)
 			p2.pit_status = "PIT_IN" if lap == self.fork_lap else "PIT_OUT"
+		if self.user_action == "PIT":
+			# The counterfactual uses a documented deterministic approximation:
+			# PitSense closes faster against a stay-out baseline, and still has a
+			# smaller projected gain when both policies pit on the same lap.
+			reduction_per_lap = 0.25 if baseline.action != "PIT" else 0.1
+			gap_reduction = min(1.5, reduction_per_lap * (age_since_fork + 1))
+			p2.gap_to_leader_seconds = max(0.0, p2.gap_to_leader_seconds - gap_reduction)
 		return SimulationTick(
 			lap=lap,
 			mode="PROJECTED",
