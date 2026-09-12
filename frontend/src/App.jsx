@@ -15,6 +15,7 @@ import PostDecisionImpact from "./components/PostDecisionImpact";
 import FinalResult from "./components/FinalResult";
 import HeadToHead from "./components/HeadToHead";
 import TyreDegradationView from "./components/TyreDegradationView";
+import SimulationLabPage from "./pages/SimulationLabPage";
 import { acceptSimulationDecision, fetchAvailableRaces, fetchCounterfactualSummary, fetchRecommendation, fetchTimeline, injectShockEvent, loadRaceSession } from "./api";
 import { PRODUCT_MODES, useSimulation } from "./state/SimulationContext";
 
@@ -388,6 +389,49 @@ export default function App() {
 				{header}
 				<p className="data-note">Loading strategy console…</p>
 			</main>
+		);
+	}
+	if (isSimulationLab) {
+		return (
+			<SimulationLabPage
+				headerProps={{
+					races: races,
+					onRaceChange: handleRaceChange,
+					onReset: handleReset,
+					isPlaying: playback.isPlaying,
+					onPlayToggle: () => (playback.isPlaying ? playback.pause?.() : playback.play?.()),
+				}}
+				selectedRace={selectedRace}
+				currentLap={currentLap}
+				totalLaps={totalLaps}
+				replayMode={replayMode}
+				forkLap={forkLap}
+				acceptedAction={acceptedAction}
+				raceMetadata={raceMetadata}
+				recommendation={recommendation}
+				recommendationPending={recommendationPending}
+				currentTyreAge={currentTyreAge}
+				projectedTicks={projectedTicks}
+				counterfactualSummary={counterfactualSummary}
+				projectedFinished={projectedFinished}
+				shockEvent={shockEvent}
+				shockLap={shockLap}
+				shockDecisions={shockDecisions}
+				reoptStatus={reoptStatus}
+				timelineEvents={timelineEvents}
+				timelineLoading={timelineLoading}
+				timelineError={timelineError}
+				historicalLapTimes={historicalLapTimes}
+				projectedLapTimes={projectedLapTimes}
+				replayInstanceKey={replayInstanceKey}
+				historicalPitLap={historicalPitLap}
+				historicalTick={historicalTick}
+				handleDecision={handleDecision}
+				handleShock={triggerShockEvent}
+				handleTick={handleTick}
+				handleSimulationTick={handleSimulationTick}
+				handlePlaybackStateChange={handlePlaybackStateChange}
+			/>
 		);
 	}
 
