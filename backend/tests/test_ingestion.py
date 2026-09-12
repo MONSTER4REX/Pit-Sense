@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from app.ingestion.normalizer import normalize_race
 from app.ingestion.validator import validate_race_state
 from app.schemas.race_state import RaceState
+from app.ingestion.fastf1_client import _has_valid_time
 
 
 def test_normalizer_preserves_missing_values_and_flags_gaps() -> None:
@@ -46,3 +47,9 @@ def test_schema_rejects_invalid_lap_values() -> None:
 		pass
 	else:
 		raise AssertionError("Invalid lap number must be rejected")
+
+
+def test_invalid_pit_timestamp_is_not_treated_as_a_pit_stop() -> None:
+	assert _has_valid_time(None) is False
+	assert _has_valid_time(float("nan")) is False
+	assert _has_valid_time(22.0) is True

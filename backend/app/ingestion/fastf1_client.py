@@ -11,6 +11,16 @@ from app.schemas.race_state import RaceState
 DEFAULT_CACHE_DIR = Path(__file__).resolve().parents[3] / "data" / "fastf1"
 
 
+def _has_valid_time(value: Any) -> bool:
+	if value is None:
+		return False
+	try:
+		seconds = float(value.total_seconds()) if hasattr(value, "total_seconds") else float(value)
+	except (TypeError, ValueError):
+		return False
+	return seconds == seconds
+
+
 @dataclass(frozen=True)
 class HistoricalSession:
 	p1: RaceState
@@ -45,7 +55,7 @@ def load_historical_race(
 	pit_rows: list[dict[str, Any]] = []
 	if "PitInTime" in laps.columns:
 		for row in lap_rows:
-			if row.get("PitInTime") is not None:
+			if _has_valid_time(row.get("PitInTime")):
 				pit_rows.append({"Lap": row.get("LapNumber"), "PitDuration": row.get("PitInTime")})
 
 	total_laps = None
@@ -90,7 +100,7 @@ def load_historical_session(
 		pit_rows = [
 			{"Lap": row.get("LapNumber"), "PitDuration": row.get("PitInTime")}
 			for row in lap_rows
-			if row.get("PitInTime") is not None
+			if _has_valid_time(row.get("PitInTime"))
 		]
 		return normalize_race(
 			year=year,
