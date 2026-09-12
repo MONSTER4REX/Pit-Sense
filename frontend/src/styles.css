@@ -11,6 +11,10 @@ button { font: inherit; }
 .app-header-brand strong { color: #f2f5f7; font: 700 1.1rem 'DM Mono', monospace; letter-spacing: .12em; }
 .app-header-brand .eyebrow { margin: 0; font-size: 10px; }
 .app-header-controls { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
+.mode-switch { display: inline-flex; border: 1px solid #2a353e; background: #111920; }
+.mode-switch button { border: 0; border-right: 1px solid #2a353e; padding: 8px 10px; color: #71828e; background: transparent; font: 10px 'DM Mono', monospace; letter-spacing: .04em; cursor: pointer; }
+.mode-switch button:last-child { border-right: 0; }
+.mode-switch button:hover, .mode-switch .mode-switch-active { color: #f2f5f7; background: #26323b; }
 .race-selector select, .lap-indicator { height: 34px; border: 1px solid #50606c; background: #131b22; color: #e8edf2; padding: 0 10px; font: 500 11px 'DM Mono', monospace; letter-spacing: .04em; }
 .race-selector select { min-width: 190px; cursor: pointer; }
 .lap-indicator { display: inline-flex; align-items: center; white-space: nowrap; }

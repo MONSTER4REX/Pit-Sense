@@ -16,7 +16,7 @@ import FinalResult from "./components/FinalResult";
 import HeadToHead from "./components/HeadToHead";
 import TyreDegradationView from "./components/TyreDegradationView";
 import { acceptSimulationDecision, fetchAvailableRaces, fetchCounterfactualSummary, fetchRecommendation, fetchTimeline, injectShockEvent, loadRaceSession } from "./api";
-import { useSimulation } from "./state/SimulationContext";
+import { PRODUCT_MODES, useSimulation } from "./state/SimulationContext";
 
 const BASE_CONFIG = {
 	current_compound: "UNKNOWN",
@@ -31,6 +31,7 @@ const REOPT_BUDGET_MS = 1000;
 export default function App() {
 	const {
 		selectedRace,
+		productMode,
 		currentLap,
 		totalLaps,
 		raceMetadata,
@@ -51,6 +52,7 @@ export default function App() {
 		counterfactualSummary,
 		setCounterfactualSummary,
 	} = useSimulation();
+	const isSimulationLab = productMode === PRODUCT_MODES.LAB;
 	const [races, setRaces] = useState([]);
 	const [raceLoading, setRaceLoading] = useState(true);
 	const [replayInstanceKey, setReplayInstanceKey] = useState(0);
@@ -412,13 +414,13 @@ export default function App() {
 				<TyreDegradationView currentLap={currentLap} currentTyreAge={currentTyreAge} recommendation={recommendation} />
 				<WhatIfPanel request={whatIfRequest} />
 			</section>
-			<section className="counterfactual-section">
+			{isSimulationLab && <section className="counterfactual-section">
 				{replayMode === "counterfactual" && <ForkTransition forkLap={forkLap} action={acceptedAction} />}
 				{replayMode === "counterfactual" && <CounterfactualSimulation forkLap={forkLap} currentLap={currentLap} projectedTicks={projectedTicks} />}
 				{replayMode === "counterfactual" && <PostDecisionImpact forkLap={forkLap} acceptedAction={acceptedAction} historicalLap={historicalPitLap} historicalTick={historicalTick} projectedTick={projectedTick} />}
 				<FinalResult summary={counterfactualSummary} visible={projectedFinished} />
-			</section>
-			<HeadToHead
+			</section>}
+			{isSimulationLab && <HeadToHead
 				replayMode={replayMode}
 				completed={projectedFinished}
 				totalLaps={totalLaps}
@@ -426,18 +428,18 @@ export default function App() {
 				raceMetadata={raceMetadata}
 				projectedTicks={projectedTicks}
 				summary={counterfactualSummary}
-			/>
+			/>}
 			<section className="workspace-grid assembly-lower" id="comparison">
 				<StrategyTimeline events={timelineEvents} loading={timelineLoading} error={timelineError} currentLap={currentLap} />
 				{replayMode === "counterfactual" && <DualLayerTimeline forkLap={forkLap} currentLap={currentLap} totalLaps={totalLaps} />}
-				<ShockEventConsole currentLap={currentLap} isRecomputing={reoptStatus === "recomputing"} activeEvent={shockEvent} onShock={triggerShockEvent} />
-				<DecisionComparison
+				{isSimulationLab && <ShockEventConsole currentLap={currentLap} isRecomputing={reoptStatus === "recomputing"} activeEvent={shockEvent} onShock={triggerShockEvent} />}
+				{isSimulationLab && <DecisionComparison
 					eventType={shockEvent}
 					lap={shockLap}
 					recommendation={recommendation}
 					baselineDecision={shockDecisions.find((decision) => decision.car === "P1")}
 					onAccept={handleDecision}
-				/>
+				/>}
 				<ReplayControls
 					key={`${replayInstanceKey}-${replayMode}-${forkLap ?? 0}`}
 					lapTimes={replayMode === "counterfactual" ? projectedLapTimes : historicalLapTimes}

@@ -5,7 +5,13 @@ export const REPLAY_MODES = {
 	COUNTERFACTUAL: "counterfactual",
 };
 
+export const PRODUCT_MODES = {
+	ANALYSIS: "analysis",
+	LAB: "lab",
+};
+
 const INITIAL_REPLAY_STATE = {
+	productMode: PRODUCT_MODES.ANALYSIS,
 	replayMode: REPLAY_MODES.HISTORICAL,
 	forkLap: null,
 	acceptedAction: null,
@@ -60,6 +66,10 @@ export function SimulationProvider({ children }) {
 		setState((current) => ({ ...current, speed }));
 	}, []);
 
+	const setProductMode = useCallback((productMode) => {
+		setState((current) => ({ ...current, productMode }));
+	}, []);
+
 	const acceptCounterfactual = useCallback((forkLap, acceptedAction) => {
 		setState((current) => ({
 			...current,
@@ -98,6 +108,7 @@ export function SimulationProvider({ children }) {
 			setRaceMetadata,
 			setCurrentLap,
 			setSpeed,
+			setProductMode,
 			acceptCounterfactual,
 			recordShockEvent,
 			recordProjectedTick,

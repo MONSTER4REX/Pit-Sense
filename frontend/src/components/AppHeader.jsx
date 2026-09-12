@@ -1,10 +1,10 @@
 import StatusBadge from "./StatusBadge";
-import { REPLAY_MODES, useSimulation } from "../state/SimulationContext";
+import { PRODUCT_MODES, REPLAY_MODES, useSimulation } from "../state/SimulationContext";
 
 const SPEEDS = [1, 2, 5];
 
 export default function AppHeader({ races, onRaceChange, onReset, isPlaying, onPlayToggle }) {
-	const { replayMode, forkLap, currentLap, totalLaps, selectedRace, speed, setSpeed } = useSimulation();
+	const { productMode, setProductMode, replayMode, forkLap, currentLap, totalLaps, selectedRace, speed, setSpeed } = useSimulation();
 	const isCounterfactual = replayMode === REPLAY_MODES.COUNTERFACTUAL;
 
 	return (
@@ -14,6 +14,10 @@ export default function AppHeader({ races, onRaceChange, onReset, isPlaying, onP
 				<strong>PITSENSE</strong>
 			</div>
 			<div className="app-header-controls">
+				<div className="mode-switch" role="tablist" aria-label="Product mode">
+					<button type="button" className={productMode === PRODUCT_MODES.ANALYSIS ? "mode-switch-active" : ""} onClick={() => setProductMode(PRODUCT_MODES.ANALYSIS)}>RACE ANALYSIS</button>
+					<button type="button" className={productMode === PRODUCT_MODES.LAB ? "mode-switch-active" : ""} onClick={() => setProductMode(PRODUCT_MODES.LAB)}>SIMULATION LAB</button>
+				</div>
 				<label className="race-selector">
 					<span className="sr-only">Select race</span>
 					<select
