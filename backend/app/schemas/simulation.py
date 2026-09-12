@@ -61,6 +61,7 @@ class CounterfactualSummary(BaseModel):
 	pitsense_projected_finish: int = Field(ge=1)
 	baseline_projected_finish: int = Field(ge=1)
 	projected_finishing_gap_seconds: float = Field(ge=0)
+	projected_advantage_seconds: float | None = None
 	projected_gain_loss_vs_historical: int
 	assumptions: list[str] = Field(min_length=1)
 	historical_vs_projected: Literal["COUNTERFACTUAL_PROJECTION"] = "COUNTERFACTUAL_PROJECTION"

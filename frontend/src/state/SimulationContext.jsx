@@ -19,6 +19,7 @@ const INITIAL_REPLAY_STATE = {
 	shockReference: null,
 	shockDecisions: [],
 	projectedTicks: [],
+	counterfactualSummary: null,
 };
 
 const SimulationContext = createContext(null);
@@ -85,6 +86,10 @@ export function SimulationProvider({ children }) {
 		}));
 	}, []);
 
+	const setCounterfactualSummary = useCallback((summary) => {
+		setState((current) => ({ ...current, counterfactualSummary: summary }));
+	}, []);
+
 	const value = useMemo(
 		() => ({
 			...state,
@@ -96,8 +101,9 @@ export function SimulationProvider({ children }) {
 			acceptCounterfactual,
 			recordShockEvent,
 			recordProjectedTick,
+			setCounterfactualSummary,
 		}),
-		[state, resetSimulation, selectRace, setRaceMetadata, setCurrentLap, setSpeed, acceptCounterfactual, recordShockEvent, recordProjectedTick],
+		[state, resetSimulation, selectRace, setRaceMetadata, setCurrentLap, setSpeed, acceptCounterfactual, recordShockEvent, recordProjectedTick, setCounterfactualSummary],
 	);
 
 	return <SimulationContext.Provider value={value}>{children}</SimulationContext.Provider>;

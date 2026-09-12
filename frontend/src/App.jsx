@@ -11,7 +11,9 @@ import DecisionComparison from "./components/DecisionComparison";
 import CounterfactualSimulation from "./components/CounterfactualSimulation";
 import ForkTransition from "./components/ForkTransition";
 import DualLayerTimeline from "./components/DualLayerTimeline";
-import { acceptSimulationDecision, fetchAvailableRaces, fetchRecommendation, fetchTimeline, injectShockEvent, loadRaceSession } from "./api";
+import PostDecisionImpact from "./components/PostDecisionImpact";
+import FinalResult from "./components/FinalResult";
+import { acceptSimulationDecision, fetchAvailableRaces, fetchCounterfactualSummary, fetchRecommendation, fetchTimeline, injectShockEvent, loadRaceSession } from "./api";
 import { useSimulation } from "./state/SimulationContext";
 
 const LAP_TIME_SECONDS = Array.from({ length: 30 }, (_, index) => 92.4 + Math.sin(index / 3) * 1.6);
@@ -46,6 +48,8 @@ export default function App() {
 		recordShockEvent,
 		recordProjectedTick,
 		projectedTicks,
+		counterfactualSummary,
+		setCounterfactualSummary,
 	} = useSimulation();
 	const [races, setRaces] = useState([]);
 	const [raceLoading, setRaceLoading] = useState(true);
@@ -209,11 +213,13 @@ export default function App() {
 			if (!response.tick) throw new Error("Simulation decision returned no projected tick");
 			recordProjectedTick(response.tick);
 			acceptCounterfactual(currentLap, action);
+			const summary = await fetchCounterfactualSummary();
+			setCounterfactualSummary(summary);
 			console.info(`[PitSense] Counterfactual transition accepted at Lap ${currentLap}: ${action}`);
 		} catch (err) {
 			setReoptError(`Counterfactual fork failed: ${err.message}`);
 		}
-	}, [acceptCounterfactual, currentLap, recordProjectedTick]);
+	}, [acceptCounterfactual, currentLap, recordProjectedTick, setCounterfactualSummary]);
 
 	const handleSimulationTick = useCallback((tick) => {
 		recordProjectedTick(tick);
@@ -290,6 +296,19 @@ export default function App() {
 		uncertainty_events: uncertaintyEvents,
 		rival_cover_stop_probability: 0.0,
 	}), [totalLaps, currentLap, currentTyreAge, uncertaintyEvents]);
+	const historicalTick = useMemo(() => {
+		if (!raceMetadata || forkLap == null) return null;
+		const p1 = raceMetadata.p1_lap_states?.find((item) => item.lap_number === forkLap);
+		const p2 = raceMetadata.p2_lap_states?.find((item) => item.lap_number === forkLap);
+		return { cars: [{ car: "P1", gap_to_leader_seconds: p1?.gap_to_leader_seconds }, { car: "P2", gap_to_leader_seconds: p2?.gap_to_leader_seconds }] };
+	}, [raceMetadata, forkLap]);
+	const historicalPitLap = useMemo(() => {
+		if (!raceMetadata || forkLap == null) return null;
+		const stops = raceMetadata.p2_pit_stops ?? [];
+		return stops.find((stop) => stop.lap_number >= forkLap)?.lap_number ?? stops.at(-1)?.lap_number ?? null;
+	}, [raceMetadata, forkLap]);
+	const projectedTick = projectedTicks.find((tick) => tick.lap === forkLap) ?? projectedTicks.at(-1);
+	const projectedFinished = replayMode === "counterfactual" && projectedTicks.some((tick) => tick.lap >= totalLaps);
 
 	if (loadError && !recommendation) {
 		return (
@@ -323,6 +342,8 @@ export default function App() {
 			{reoptError && <p className="error-note">Re-optimization error: {reoptError}</p>}
 			{replayMode === "counterfactual" && <ForkTransition forkLap={forkLap} action={acceptedAction} />}
 			{replayMode === "counterfactual" && <CounterfactualSimulation forkLap={forkLap} currentLap={currentLap} projectedTicks={projectedTicks} />}
+			{replayMode === "counterfactual" && <PostDecisionImpact forkLap={forkLap} acceptedAction={acceptedAction} historicalLap={historicalPitLap} historicalTick={historicalTick} projectedTick={projectedTick} />}
+			<FinalResult summary={counterfactualSummary} visible={projectedFinished} />
 			<section className="decision-layout">
 				<RaceCarPanels
 					metadata={raceMetadata}
@@ -347,7 +368,7 @@ export default function App() {
 				<WhatIfPanel request={whatIfRequest} />
 				<ReplayControls
 					key={`${replayInstanceKey}-${replayMode}-${forkLap ?? 0}`}
-					lapTimes={LAP_TIME_SECONDS}
+					lapTimes={replayMode === "counterfactual" ? Array.from({ length: Math.max(1, totalLaps - forkLap + 1) }, () => null) : LAP_TIME_SECONDS}
 					startLap={replayMode === "counterfactual" ? forkLap : 1}
 					startTyreAge={0}
 					onTick={handleTick}

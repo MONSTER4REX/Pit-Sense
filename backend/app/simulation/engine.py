@@ -140,11 +140,14 @@ class SimulationEngine:
 		last = self.projected_tick(self.end_lap)
 		p1 = next(car for car in last.cars if car.car == "P1")
 		p2 = next(car for car in last.cars if car.car == "P2")
+		historical_gap = self._historical_car(self.p2, "P2", self.end_lap).gap_to_leader_seconds
+		projected_gap = abs(p2.gap_to_leader_seconds - p1.gap_to_leader_seconds)
 		return CounterfactualSummary(
 			historical_finish=historical,
 			pitsense_projected_finish=p2.position,
 			baseline_projected_finish=p1.position,
-			projected_finishing_gap_seconds=abs(p2.gap_to_leader_seconds - p1.gap_to_leader_seconds),
+			projected_finishing_gap_seconds=projected_gap,
+			projected_advantage_seconds=historical_gap - projected_gap,
 			projected_gain_loss_vs_historical=historical["P2"] - p2.position,
 			assumptions=[
 				f"Pit-lane loss approximated as {self.pit_lane_loss_seconds:.1f}s.",
