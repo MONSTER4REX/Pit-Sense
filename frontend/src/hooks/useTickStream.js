@@ -62,6 +62,7 @@ export function useTickStream({ lapTimes, startLap = 1, startTyreAge = 12, onTic
 							trafficRejoinRisk: payload.traffic_rejoin_risk,
 							tyreAge: payload.tyre_age ?? p2?.tyre_age,
 							distanceToDriverAhead: payload.distance_to_driver_ahead,
+							recommendation: payload.recommendation,
 							mode: payload.mode ?? "HISTORICAL",
 							decisions: payload.decisions ?? [],
 						};

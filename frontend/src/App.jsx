@@ -206,6 +206,12 @@ export default function App() {
 		const tyreAge = observedTyreAge ?? 0;
 		currentTyreAgeRef.current = tyreAge;
 		setCurrentTyreAge(tyreAge);
+		if (tick.recommendation) {
+			setRecommendation(tick.recommendation);
+			setRecommendationPending(false);
+			setReoptStatus("synced");
+			return;
+		}
 		if (!totalLaps) return;
 		const requestId = ++tickRequestRef.current;
 		setRecommendationPending(true);

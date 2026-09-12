@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from typing import AsyncIterator, Iterable
+from typing import Any, AsyncIterator, Iterable
 
 from app.rival_model.cover_stop import cover_stop_probability
 from app.rival_model.rejoin_traffic import calculate_traffic_penalty
 from app.replay.fastf1_live import extract_lap_dynamic_data
+from app.engine.reoptimizer import optimize_strategy
 
 @dataclass(frozen=True)
 class ReplayTick:
@@ -17,6 +18,7 @@ class ReplayTick:
 	traffic_rejoin_risk: float = 0.0
 	tyre_age: int = 0
 	distance_to_driver_ahead: float = 0.0
+	recommendation: dict[str, Any] | None = None
 
 
 async def replay_ticks(
@@ -30,8 +32,9 @@ async def replay_ticks(
 ) -> AsyncIterator[ReplayTick]:
 	if speed <= 0:
 		raise ValueError("Replay speed must be positive")
+	lap_values = list(lap_times)
 	elapsed = 0.0
-	for offset, lap_time in enumerate(lap_times):
+	for offset, lap_time in enumerate(lap_values):
 		lap_number = start_lap + offset
 		current_tyre_age = max(1, start_tyre_age + offset)
 		
@@ -53,6 +56,15 @@ async def replay_ticks(
 			lap_number=lap_number,
 			cars_ahead_gaps_seconds=gaps_to_use
 		)
+		recommendation = optimize_strategy(
+			start_lap=lap_number,
+			end_lap=max(lap_number + 1, start_lap + len(lap_values) - 1),
+			current_compound="MEDIUM",
+			current_tyre_age=current_tyre_age,
+			lap_time_seconds=[value for value in [lap_time] if value is not None] or [90.0, 90.0],
+			uncertainty_events=(),
+			rival_cover_stop_probability=rival_cover,
+		)
 		
 		duration = (lap_time or 0.0) / speed
 		await asyncio.sleep(min(duration, 0.01))
@@ -64,5 +76,6 @@ async def replay_ticks(
 			rival_cover_stop_probability=rival_cover,
 			traffic_rejoin_risk=traffic_risk,
 			tyre_age=current_tyre_age,
-			distance_to_driver_ahead=round(dist_ahead, 2)
+			distance_to_driver_ahead=round(dist_ahead, 2),
+			recommendation=recommendation.model_dump(mode="json")
 		)
