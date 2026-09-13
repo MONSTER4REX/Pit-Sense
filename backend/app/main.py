@@ -146,6 +146,7 @@ def race_session(year: int, event_name: str, request: Request) -> dict[str, obje
 		session.p1, session.p2, field_median_lap_times=session.field_median_lap_times
 	)
 	state.historical_events = session.historical_events
+	state.forget_answers()
 	state.context = SessionReplayContext(
 		p1=session.p1,
 		p2=session.p2,
@@ -196,6 +197,12 @@ def recommendation(request: Request, lap: int = Query(ge=1)) -> dict[str, object
 	if lap > ctx.end_lap:
 		raise HTTPException(status_code=422, detail=f"Lap {lap} is beyond this race's {ctx.end_lap} laps")
 
+	state = visitor(request)
+	key = ("recommendation", lap, ctx.uncertainty_events)
+	cached = state.cached(key)
+	if cached is not None:
+		return cached
+
 	started = perf_counter()
 	result = optimize_strategy(
 		start_lap=lap,
@@ -206,7 +213,7 @@ def recommendation(request: Request, lap: int = Query(ge=1)) -> dict[str, object
 	payload = result.model_dump(mode="json")
 	payload["computed_in_seconds"] = round(perf_counter() - started, 5)
 	payload["lap"] = lap
-	return payload
+	return state.remember(key, payload)
 
 
 @app.get("/api/strategy/what-if")
@@ -216,16 +223,25 @@ def what_if(request: Request, lap: int = Query(ge=1)) -> dict[str, object]:
 	if lap > ctx.end_lap:
 		raise HTTPException(status_code=422, detail=f"Lap {lap} is beyond this race's {ctx.end_lap} laps")
 
+	state = visitor(request)
+	key = ("what-if", lap, ctx.uncertainty_events)
+	cached = state.cached(key)
+	if cached is not None:
+		return cached
+
 	branches = compare_branches(
 		current_lap=lap,
 		end_lap=max(lap + 1, ctx.end_lap),
 		uncertainty_events=ctx.uncertainty_events,
 		**_engine_inputs(ctx, lap),
 	)
-	return {
-		"lap": lap,
-		"branches": {name: branch.model_dump(mode="json") for name, branch in branches.items()},
-	}
+	return state.remember(
+		key,
+		{
+			"lap": lap,
+			"branches": {name: branch.model_dump(mode="json") for name, branch in branches.items()},
+		},
+	)
 
 
 @app.post("/api/simulation/shock")
@@ -248,6 +264,7 @@ def simulation_shock(shock: ShockRequest, request: Request) -> dict[str, object]
 			uncertainty_events=(shock.event_type.value,),
 			field_median_lap_times=state.context.field_median_lap_times,
 		)
+	state.forget_answers()
 	timeline.record(session_id(request), "shock_event", shock.lap, shock.event_type.value)
 
 	return {

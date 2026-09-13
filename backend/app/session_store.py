@@ -31,6 +31,13 @@ COOKIE_NAME = "pitsense_session"
 MAX_SESSIONS = 64
 
 
+# Computed answers held per visitor. A recommendation is a pure function of the
+# loaded race, the lap, and the active shock, so re-deriving it every time the
+# user scrubs back over a lap they have already seen is wasted work - and on a
+# small instance that wasted CPU is what starves the health check.
+MAX_CACHED_LAPS = 128
+
+
 @dataclass
 class VisitorState:
 	"""One visitor's loaded race and everything derived from it."""
@@ -39,6 +46,23 @@ class VisitorState:
 	context: SessionReplayContext | None = None
 	historical_events: list[dict[str, str]] = field(default_factory=list)
 	circuit_cache: dict[str, dict[str, object]] = field(default_factory=dict)
+	_answers: OrderedDict[tuple, dict] = field(default_factory=OrderedDict)
+
+	def cached(self, key: tuple) -> dict | None:
+		answer = self._answers.get(key)
+		if answer is not None:
+			self._answers.move_to_end(key)
+		return answer
+
+	def remember(self, key: tuple, answer: dict) -> dict:
+		self._answers[key] = answer
+		while len(self._answers) > MAX_CACHED_LAPS:
+			self._answers.popitem(last=False)
+		return answer
+
+	def forget_answers(self) -> None:
+		"""Drop cached answers after anything that changes what they would be."""
+		self._answers.clear()
 
 
 class SessionStore:

@@ -7,11 +7,49 @@
  * therefore cannot get wrong - any authoritative race state.
  */
 
-let sessionToken = null;
+/*
+ * The visitor's session token.
+ *
+ * The server will mint one if the client does not send it, but letting it do
+ * that is a race: the first page load fires several requests at once, each
+ * arrives without a token, each gets a *different* one minted, and whichever
+ * response lands last wins. A race loaded under one token was then queried
+ * under another, and the second token's slot had no race in it - which is the
+ * "load a historical race session first" error the what-if panel was hitting.
+ *
+ * Generating it on the client removes the race entirely: every request from the
+ * very first one carries the same token, whatever order they complete in. It is
+ * kept in sessionStorage so a reload keeps the visitor's loaded race, and a
+ * second tab is treated as a second visitor.
+ */
+const SESSION_STORAGE_KEY = "pitsense.session";
+
+function createToken() {
+	if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID().replace(/-/g, "");
+	return `${Date.now().toString(16)}${Math.random().toString(16).slice(2, 14)}`;
+}
+
+function readToken() {
+	try {
+		const existing = globalThis.sessionStorage?.getItem(SESSION_STORAGE_KEY);
+		if (existing) return existing;
+		const minted = createToken();
+		globalThis.sessionStorage?.setItem(SESSION_STORAGE_KEY, minted);
+		return minted;
+	} catch {
+		// Private modes and embedded webviews can refuse storage; a per-load token
+		// still beats letting the server mint one per parallel request.
+		return createToken();
+	}
+}
+
+let sessionToken = readToken();
 
 async function parseOrThrow(response) {
+	// The server echoes the token back. It should always match the one sent; it
+	// only differs if storage was unavailable and the server minted one instead.
 	const responseToken = response.headers.get("X-PitSense-Session");
-	if (responseToken) sessionToken = responseToken;
+	if (responseToken && !sessionToken) sessionToken = responseToken;
 	if (!response.ok) {
 		const body = await response.text().catch(() => "");
 		let message = "";
@@ -37,7 +75,7 @@ function getJson(path, signal) {
 	return fetch(path, {
 		signal,
 		credentials: "include",
-		headers: sessionToken ? { "X-PitSense-Session": sessionToken } : undefined,
+		headers: { "X-PitSense-Session": sessionToken },
 	}).then(parseOrThrow);
 }
 
@@ -46,7 +84,7 @@ function postJson(path, body, signal) {
 		method: "POST",
 		headers: {
 			"Content-Type": "application/json",
-			...(sessionToken ? { "X-PitSense-Session": sessionToken } : {}),
+			"X-PitSense-Session": sessionToken,
 		},
 		body: JSON.stringify(body),
 		signal,
