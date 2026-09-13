@@ -53,3 +53,24 @@ def test_invalid_pit_timestamp_is_not_treated_as_a_pit_stop() -> None:
 	assert _has_valid_time(None) is False
 	assert _has_valid_time(float("nan")) is False
 	assert _has_valid_time(22.0) is True
+
+
+def test_fastf1_circuit_data_schema() -> None:
+	from app.schemas.circuit import CircuitInfoData, CornerInfo, FastF1CircuitData
+
+	data = FastF1CircuitData(
+		year=2024,
+		event_name="Bahrain Grand Prix",
+		circuit_info=CircuitInfoData(
+			corners=[CornerInfo(number=1, x=42.4, y=8329.2, angle=-246.6)],
+			rotation=92.0,
+		),
+		x=[1.0, 2.0, 3.0],
+		y=[4.0, 5.0, 6.0],
+	)
+
+	assert data.year == 2024
+	assert len(data.circuit_info.corners) == 1
+	assert data.circuit_info.corners[0].number == 1
+	assert data.x == [1.0, 2.0, 3.0]
+

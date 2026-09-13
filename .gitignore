@@ -5,9 +5,14 @@ __pycache__/
 *.log
 frontend/node_modules/
 frontend/dist/
+pitsense.sqlite3
 backend/pitsense.sqlite3
 backend/fastf1_cache/
 data/fastf1/
 data/20*/
 data/fastf1_http_cache.sqlite
+data/geometry_verification.json
 
+
+# Superseded planning material kept locally; PRD v2.0 is the source of truth.
+files/

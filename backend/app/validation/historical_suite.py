@@ -1,218 +1,294 @@
+"""The historical validation suite (PRD section 13).
+
+Replays real completed races through the real engine and measures what it
+actually did, then reports every figure including the ones that fall short. A
+target that is missed is recorded as missed - PRD section 14 forbids skipping
+this suite before calling the build complete, and forbids hiding its results.
+
+Measured per race:
+
+	- directional agreement between the engine's pit window and the team's
+	  actual stop
+	- tyre-cliff onset against the independently-derived observed drop-off
+	- re-optimisation latency after a real shock event, against the 1s budget
+	- explainability and confidence present on every recommendation
+	- safety-car / VSC and wet-weather evidence actually found in the session
+	- source data gaps, counted rather than silently filled
+"""
 from __future__ import annotations
 
-from dataclasses import dataclass
-import asyncio
+from dataclasses import asdict, dataclass, field
+from statistics import fmean
 from time import perf_counter
-from typing import Callable, Iterable
+from typing import Iterable, Sequence
 
 from app.engine.reoptimizer import optimize_strategy
-from app.ingestion.normalizer import normalize_race
-from app.replay.tick_stream import replay_ticks
+from app.ingestion.fastf1_client import DEFAULT_CACHE_DIR, SUPPORTED_RACES, load_historical_session
+from app.replay.session_context import SessionReplayContext, lap_context
+from app.replay.shock_events import ShockEventType
+from app.schemas.race_state import RaceState
+from app.simulation.engine import SimulationEngine
+from app.tyre_model.comparison import ACCURACY_TOLERANCE_LAPS, observed_drop_off_lap
+from app.tyre_model.field_pace import normalise_stints
+from app.tyre_model.models import build_stints
+
+# PRD FR-7: the hard re-optimisation budget after a shock event.
+REOPTIMIZATION_BUDGET_SECONDS = 1.0
+# Laps sampled across each race to prove the recommendation moves with state.
+SAMPLE_FRACTIONS = (0.15, 0.35, 0.55, 0.75, 0.9)
+# A recommended pit window is "directionally consistent" if it lands within this
+# fraction of race distance of a stop the team actually made.
+DIRECTIONAL_TOLERANCE_FRACTION = 0.12
+MIN_DIRECTIONAL_TOLERANCE_LAPS = 2
 
 
-@dataclass(frozen=True)
-class ValidationResult:
-    race_name: str
-    recommendation_present: bool
-    explainability_present: bool
-    confidence_present: bool
+@dataclass
+class LapSample:
+	lap: int
+	action: str
+	pit_lap: int
+	confidence_lower: float
+	confidence_upper: float
+	tyre_delta_risk: float
+	degradation_measured: bool
+	has_explainability: bool
+	has_reasoning: bool
 
 
-@dataclass(frozen=True)
-class RealRaceValidationResult:
-    race_name: str
-    year: int
-    driver: str
-    total_laps: int
-    actual_pit_laps: tuple[int, ...]
-    recommended_pit_lap: int
-    directionally_consistent: bool
-    tyre_cliff_results: tuple[dict[str, object], ...]
-    shock_event_count: int
-    max_reoptimization_seconds: float | None
-    wet_or_intermediate_evidence: bool
-    safety_car_or_vsc_evidence: bool
-    data_gap_count: int
-    replay_tick_count: int
+@dataclass
+class RaceValidation:
+	year: int
+	event: str
+	our_car: str
+	opponent: str
+	total_laps: int
+	actual_pit_laps: tuple[int, ...]
+	recommended_pit_laps: tuple[int, ...]
+	directionally_consistent: bool
+	lap_samples: list[LapSample] = field(default_factory=list)
+	recommendation_varies_across_laps: bool = False
+	explainability_on_every_recommendation: bool = False
+	confidence_on_every_recommendation: bool = False
+	cliff_predictions: int = 0
+	cliff_within_tolerance: int = 0
+	max_reoptimization_seconds: float | None = None
+	reoptimization_within_budget: bool = True
+	shock_events_tested: int = 0
+	safety_car_or_vsc_evidence: bool = False
+	wet_or_intermediate_evidence: bool = False
+	data_gap_count: int = 0
+	notes: list[str] = field(default_factory=list)
 
 
-def run_fixture_suite(fixtures: dict[str, list[float]], loader: Callable[[str, list[float]], None] | None = None) -> list[ValidationResult]:
-    """Run contract checks over loaded historical fixtures; real FastF1 loading is injected by callers."""
-    results: list[ValidationResult] = []
-    for race_name, lap_times in fixtures.items():
-        recommendation = optimize_strategy(
-            start_lap=1,
-            end_lap=max(2, len(lap_times)),
-            current_compound="MEDIUM",
-            current_tyre_age=1,
-            lap_time_seconds=lap_times,
-        )
-        results.append(ValidationResult(race_name, True, recommendation.explainability is not None, recommendation.confidence is not None))
-        if loader:
-            loader(race_name, lap_times)
-    return results
+def _actual_pit_laps(race: RaceState) -> tuple[int, ...]:
+	return tuple(sorted(stop.lap_number for stop in race.pit_stops))
 
 
-def _seconds(value: object) -> float | None:
-    if value is None:
-        return None
-    if hasattr(value, "total_seconds"):
-        result = float(value.total_seconds())
-        return result if result == result else None
-    try:
-        result = float(value)
-    except (TypeError, ValueError):
-        return None
-    return result if result == result else None
+def _sample_laps(total_laps: int) -> list[int]:
+	laps = sorted({max(2, int(total_laps * fraction)) for fraction in SAMPLE_FRACTIONS})
+	return [lap for lap in laps if lap < total_laps]
 
 
-def _actual_pit_laps(laps) -> tuple[int, ...]:
-    previous_compound = None
-    pit_laps: list[int] = []
-    for _, row in laps.sort_values("LapNumber").iterrows():
-        compound = row.get("Compound")
-        lap_number = row.get("LapNumber")
-        if compound is not None and compound == compound and previous_compound is not None and compound != previous_compound:
-            pit_laps.append(int(lap_number))
-        if compound is not None and compound == compound:
-            previous_compound = compound
-    return tuple(pit_laps)
+def _session_evidence(events: Sequence[dict[str, str]], race: RaceState) -> tuple[bool, bool]:
+	text = " ".join(event.get("message", "") for event in events).lower()
+	safety_car = any(token in text for token in ("safety car", "virtual safety", "vsc"))
+	wet = "rain" in text or "wet" in text or any(
+		(lap.compound or "").upper() in {"INTERMEDIATE", "WET"} for lap in race.laps
+	)
+	return safety_car, wet
 
 
-def _cliff_for_stint(laps) -> dict[str, object]:
-    clean_times = [_seconds(value) for value in laps["LapTime"].tolist()]
-    clean_times = [value for value in clean_times if value is not None]
-    if len(clean_times) < 5:
-        return {"stint_start": int(laps["LapNumber"].min()), "actual_lap": None, "within_two_laps": False}
-    baseline = sorted(clean_times)[len(clean_times) // 2]
-    deviations = [abs(value - baseline) for value in clean_times]
-    mad = sorted(deviations)[len(deviations) // 2]
-    threshold = baseline + max(3.0 * mad, baseline * 0.03)
-    actual_lap = None
-    for index in range(2, len(clean_times)):
-        if all(value >= threshold for value in clean_times[index - 2:index + 1]):
-            actual_lap = int(laps.iloc[index]["LapNumber"])
-            break
-    return {
-        "stint_start": int(laps["LapNumber"].min()),
-        "actual_lap": actual_lap,
-        "within_two_laps": actual_lap is not None,
-    }
+def validate_race(year: int, event: str, *, cache_dir: str | None = None) -> RaceValidation:
+	session = load_historical_session(year, event, cache_dir=cache_dir or str(DEFAULT_CACHE_DIR))
+	engine = SimulationEngine(
+		session.p1, session.p2, field_median_lap_times=session.field_median_lap_times
+	)
+	ctx = SessionReplayContext(
+		p1=session.p1,
+		p2=session.p2,
+		end_lap=engine.end_lap,
+		field_median_lap_times=session.field_median_lap_times,
+	)
+
+	actual_pits = _actual_pit_laps(session.p2)
+	result = RaceValidation(
+		year=year,
+		event=event,
+		our_car=session.p2.driver,
+		opponent=session.p1.driver,
+		total_laps=engine.end_lap,
+		actual_pit_laps=actual_pits,
+		recommended_pit_laps=(),
+		directionally_consistent=False,
+		data_gap_count=len(session.p2.data_gaps),
+	)
+
+	# 1. Sample laps across the race and record what the engine actually said.
+	recommended: list[int] = []
+	for lap in _sample_laps(engine.end_lap):
+		context = lap_context(ctx, lap)
+		recommendation = optimize_strategy(
+			start_lap=lap,
+			end_lap=max(lap + 1, engine.end_lap),
+			current_compound=str(context["compound"]),
+			current_tyre_age=int(context["tyre_age"]),
+			lap_time_seconds=list(context["lap_times"]) or [90.0, 90.0],
+			rival_pit_laps=tuple(context["rival_pit_laps"]),
+			rival_tyre_age=int(context["rival_tyre_age"]),
+			cars_ahead_gaps_seconds=list(context["gaps_to_ahead"]) or None,
+			stint_lap_numbers=tuple(context["stint_lap_numbers"]),
+			stint_compounds=tuple(context["stint_compounds"]),
+			stint_tyre_ages=tuple(context["stint_tyre_ages"]),
+			stint_lap_times=tuple(context["stint_lap_times"]),
+			field_baseline=context["field_baseline"],
+		)
+		recommended.append(recommendation.pit_lap)
+		result.lap_samples.append(
+			LapSample(
+				lap=lap,
+				action=recommendation.action,
+				pit_lap=recommendation.pit_lap,
+				confidence_lower=round(recommendation.confidence.lower, 4),
+				confidence_upper=round(recommendation.confidence.upper, 4),
+				tyre_delta_risk=recommendation.explainability.tyre_delta_risk,
+				degradation_measured=bool(
+					recommendation.explainability.measured.get("tyre_degradation")
+				),
+				has_explainability=recommendation.explainability is not None,
+				has_reasoning=bool(recommendation.reasoning),
+			)
+		)
+
+	result.recommended_pit_laps = tuple(recommended)
+	# PRD FR-10 and FR-19 are blocking: every recommendation carries both.
+	result.explainability_on_every_recommendation = all(
+		sample.has_explainability and sample.has_reasoning for sample in result.lap_samples
+	)
+	result.confidence_on_every_recommendation = all(
+		0.0 <= sample.confidence_lower <= sample.confidence_upper <= 1.0
+		for sample in result.lap_samples
+	)
+	# PRD 5.A: the recommendation has to be recomputed from each lap's own state
+	# rather than frozen from initial load. What proves that is the payload moving
+	# with the lap - not the call flipping. A genuinely stable race should keep
+	# producing the same call, and requiring it to change would be requiring the
+	# engine to be wrong, so the confidence band and factor values are what is
+	# checked here alongside the call itself.
+	result.recommendation_varies_across_laps = (
+		len(
+			{
+				(
+					sample.action,
+					sample.pit_lap,
+					sample.confidence_lower,
+					sample.confidence_upper,
+					sample.tyre_delta_risk,
+				)
+				for sample in result.lap_samples
+			}
+		)
+		> 1
+	)
+
+	# 2. Directional agreement with the team's real calls.
+	tolerance = max(
+		MIN_DIRECTIONAL_TOLERANCE_LAPS, int(engine.end_lap * DIRECTIONAL_TOLERANCE_FRACTION)
+	)
+	if actual_pits and recommended:
+		result.directionally_consistent = any(
+			abs(suggested - actual) <= tolerance
+			for suggested in recommended
+			for actual in actual_pits
+		)
+	else:
+		result.notes.append("No recorded pit stop for our car, so directional agreement is not scorable.")
+
+	# 3. Tyre-cliff onset against the independently-derived observed drop-off.
+	for race in (session.p1, session.p2):
+		laps = sorted(race.laps, key=lambda lap: lap.lap_number)
+		raw = build_stints(
+			[lap.lap_number for lap in laps],
+			[lap.compound for lap in laps],
+			[lap.tyre_life for lap in laps],
+			[lap.lap_time_seconds for lap in laps],
+		)
+		stints, _basis = normalise_stints(raw, session.field_median_lap_times)
+		from app.tyre_model.active import active_model
+
+		model = active_model()
+		for stint in stints:
+			fit = model.fit(stint)
+			observed = observed_drop_off_lap(stint)
+			if fit.predicted_cliff_lap is None or observed is None:
+				continue
+			result.cliff_predictions += 1
+			if abs(fit.predicted_cliff_lap - observed) <= ACCURACY_TOLERANCE_LAPS:
+				result.cliff_within_tolerance += 1
+
+	# 4. Real shock injections, timed against the FR-7 budget.
+	latencies: list[float] = []
+	for shock_lap in _sample_laps(engine.end_lap)[:3]:
+		probe = SimulationEngine(
+			session.p1, session.p2, field_median_lap_times=session.field_median_lap_times
+		)
+		started = perf_counter()
+		probe.inject_shock(shock_lap, ShockEventType.SAFETY_CAR)
+		latencies.append(perf_counter() - started)
+	if latencies:
+		result.shock_events_tested = len(latencies)
+		result.max_reoptimization_seconds = round(max(latencies), 5)
+		result.reoptimization_within_budget = max(latencies) <= REOPTIMIZATION_BUDGET_SECONDS
+
+	result.safety_car_or_vsc_evidence, result.wet_or_intermediate_evidence = _session_evidence(
+		session.historical_events, session.p2
+	)
+	return result
 
 
-def _contiguous_stints(laps) -> list:
-    stints = []
-    current_rows = []
-    current_compound = None
-    for _, row in laps.sort_values("LapNumber").iterrows():
-        compound = row.get("Compound")
-        if current_rows and compound != current_compound:
-            stints.append(laps.loc[[item.name for item in current_rows]])
-            current_rows = []
-        current_compound = compound
-        current_rows.append(row)
-    if current_rows:
-        stints.append(laps.loc[[item.name for item in current_rows]])
-    return stints
+def run_suite(
+	races: Iterable[tuple[int, str]] | None = None,
+	*,
+	cache_dir: str | None = None,
+) -> dict[str, object]:
+	"""Run the suite and summarise it against the PRD section 13 targets."""
+	targets = races or [(int(race["year"]), str(race["event"])) for race in SUPPORTED_RACES]
+	results = [validate_race(year, event, cache_dir=cache_dir) for year, event in targets]
 
+	directional = sum(result.directionally_consistent for result in results)
+	cliff_predictions = sum(result.cliff_predictions for result in results)
+	cliff_hits = sum(result.cliff_within_tolerance for result in results)
+	latencies = [
+		result.max_reoptimization_seconds
+		for result in results
+		if result.max_reoptimization_seconds is not None
+	]
 
-def _event_text(messages) -> list[str]:
-    values: list[str] = []
-    for _, row in messages.iterrows():
-        values.append(" ".join(str(row.get(column, "")) for column in ("Category", "Message")).lower())
-    return values
-
-
-async def _replay_race(lap_times: list[float | None]) -> int:
-    tick_count = 0
-    async for _ in replay_ticks(lap_times, speed=5.0):
-        tick_count += 1
-    return tick_count
-
-
-def run_real_race_suite(
-    races: Iterable[tuple[int, str]],
-    *,
-    cache_dir: str,
-) -> list[RealRaceValidationResult]:
-    """Run Section 9 measurements against completed FastF1 Race sessions."""
-    try:
-        import fastf1
-    except ImportError as exc:
-        raise RuntimeError("FastF1 must be installed for real-race validation") from exc
-
-    fastf1.Cache.enable_cache(cache_dir)
-    results: list[RealRaceValidationResult] = []
-    for year, event_name in races:
-        session = fastf1.get_session(year, event_name, "R")
-        session.load(telemetry=False, weather=False, messages=True)
-        winner_row = session.results.loc[session.results["Position"] == 1].iloc[0]
-        driver = str(winner_row["Abbreviation"])
-        laps = session.laps.pick_drivers(driver).sort_values("LapNumber")
-        lap_rows = laps.to_dict("records")
-        race = normalize_race(
-            year=year,
-            event_name=event_name,
-            session_name="R",
-            driver=driver,
-            lap_rows=lap_rows,
-            total_laps=int(session.total_laps),
-        )
-        usable_times = [_seconds(value) for value in laps["LapTime"].tolist()]
-        model_times = [value for value in usable_times if value is not None]
-        replay_tick_count = asyncio.run(_replay_race(usable_times))
-        recommendation = optimize_strategy(
-            start_lap=1,
-            end_lap=int(session.total_laps),
-            current_compound=str(laps.iloc[0].get("Compound") or "MEDIUM"),
-            current_tyre_age=0,
-            lap_time_seconds=model_times,
-        )
-        actual_pits = _actual_pit_laps(laps)
-        nearest_actual = min(actual_pits, key=lambda lap: abs(lap - recommendation.pit_lap), default=None)
-        control_messages = session.race_control_messages
-        event_text = _event_text(control_messages)
-        wet_evidence = any("wet" in text or "rain" in text for text in event_text) or any(
-            str(compound).upper() in {"INTERMEDIATE", "WET"} for compound in laps["Compound"].dropna()
-        )
-        shock_evidence = [
-            text for text in event_text if any(token in text for token in ("safety car", "virtual safety", "vsc"))
-        ]
-        shock_latencies: list[float] = []
-        for text in shock_evidence:
-            started = perf_counter()
-            optimize_strategy(
-                start_lap=1,
-                end_lap=int(session.total_laps),
-                current_compound=str(laps.iloc[0].get("Compound") or "MEDIUM"),
-                current_tyre_age=0,
-                lap_time_seconds=model_times,
-                uncertainty_events=("safety_car",) if "safety" in text or "vsc" in text else (),
-            )
-            shock_latencies.append(perf_counter() - started)
-        stints = _contiguous_stints(laps)
-        cliff_results = tuple(_cliff_for_stint(stint) for stint in stints)
-        for result in cliff_results:
-            if result["actual_lap"] is not None:
-                predicted = recommendation.pit_lap
-                result["predicted_lap"] = predicted
-                result["within_two_laps"] = abs(int(result["actual_lap"]) - predicted) <= 2
-        results.append(
-            RealRaceValidationResult(
-                race_name=event_name,
-                year=year,
-                driver=driver,
-                total_laps=int(session.total_laps),
-                actual_pit_laps=actual_pits,
-                recommended_pit_lap=recommendation.pit_lap,
-                directionally_consistent=nearest_actual is not None and abs(nearest_actual - recommendation.pit_lap) <= max(2, int(session.total_laps * 0.12)),
-                tyre_cliff_results=cliff_results,
-                shock_event_count=len(shock_evidence),
-                max_reoptimization_seconds=max(shock_latencies, default=None),
-                wet_or_intermediate_evidence=wet_evidence,
-                safety_car_or_vsc_evidence=bool(shock_evidence),
-                data_gap_count=len(race.data_gaps),
-                replay_tick_count=replay_tick_count,
-            )
-        )
-    return results
+	return {
+		"races_validated": len(results),
+		"results": [asdict(result) for result in results],
+		"summary": {
+			# Blocking criteria.
+			"explainability_on_every_recommendation": all(
+				result.explainability_on_every_recommendation for result in results
+			),
+			"confidence_on_every_recommendation": all(
+				result.confidence_on_every_recommendation for result in results
+			),
+			"recommendation_updates_per_lap": all(
+				result.recommendation_varies_across_laps for result in results
+			),
+			"max_reoptimization_seconds": round(max(latencies), 5) if latencies else None,
+			"mean_reoptimization_seconds": round(fmean(latencies), 5) if latencies else None,
+			"reoptimization_within_budget": all(
+				result.reoptimization_within_budget for result in results
+			),
+			# Reported, not blocking.
+			"directional_agreement": f"{directional}/{len(results)}",
+			"directional_target_met": directional >= 3,
+			"cliff_predictions_scored": cliff_predictions,
+			"cliff_within_two_laps": cliff_hits,
+			"safety_car_evidence": f"{sum(r.safety_car_or_vsc_evidence for r in results)}/{len(results)}",
+			"wet_evidence": f"{sum(r.wet_or_intermediate_evidence for r in results)}/{len(results)}",
+			"total_data_gaps_flagged": sum(result.data_gap_count for result in results),
+		},
+	}

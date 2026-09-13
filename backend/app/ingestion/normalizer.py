@@ -47,6 +47,7 @@ def normalize_laps(rows: Iterable[Mapping[str, Any]]) -> tuple[list[LapState], l
 		compound = _value(raw_row, "Compound", "compound")
 		tyre_life = _optional_int(_value(raw_row, "TyreLife", "tyre_life"))
 		position = _optional_int(_value(raw_row, "Position", "position"))
+		session_time = _seconds(_value(raw_row, "Time", "session_time_seconds"))
 		gap = _seconds(_value(raw_row, "GapToLeader", "gap_to_leader_seconds"))
 		sectors = {
 			key: _seconds(_value(raw_row, key, f"{key}_seconds"))
@@ -68,6 +69,7 @@ def normalize_laps(rows: Iterable[Mapping[str, Any]]) -> tuple[list[LapState], l
 				compound=str(compound) if compound is not None else None,
 				tyre_life=tyre_life,
 				position=position,
+				session_time_seconds=session_time,
 				gap_to_leader_seconds=gap,
 				sector_times_seconds=sectors,
 			)

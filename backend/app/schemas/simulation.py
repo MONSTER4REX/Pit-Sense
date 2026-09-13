@@ -12,6 +12,20 @@ CarRole = Literal["P1", "P2"]
 ModelType = Literal["PITSENSE", "BASELINE"]
 SimulationAction = Literal["PIT", "STAY_OUT", "EXTEND"]
 
+# Exhaustive set of reasons a strategic recomputation is allowed to fire.
+# A tick with no triggers must not carry new decisions (no timer-based recompute).
+ReoptimizationTrigger = Literal[
+	"SHOCK_EVENT",
+	"USER_DECISION",
+	"TARGET_LAP_REACHED",
+	"P1_PIT",
+	"P2_PIT",
+	"TYRE_STATE_CHANGE",
+	"TRAFFIC_CHANGE",
+	"GAP_CHANGE",
+	"OTHER_MATERIAL_EVENT",
+]
+
 
 class StrategyDecision(BaseModel):
 	model_config = ConfigDict(extra="forbid")
@@ -55,6 +69,21 @@ class SimulationTick(BaseModel):
 	decisions: list[StrategyDecision] = Field(default_factory=list)
 	decision_lap: int | None = Field(default=None, ge=1)
 	next_review_lap: int | None = Field(default=None, ge=1)
+	triggers: list[ReoptimizationTrigger] = Field(default_factory=list)
+
+
+class ReoptimizationRecord(BaseModel):
+	model_config = ConfigDict(extra="forbid")
+
+	lap: int = Field(ge=1)
+	triggers: list[ReoptimizationTrigger] = Field(min_length=1)
+	p1_decision: StrategyDecision
+	p2_decision: StrategyDecision
+	state_summary: dict[str, float | int | str | None]
+	# Unique per computation, so the UI can prove a re-optimisation is genuinely
+	# new rather than a relabelled earlier value (PRD FR-27).
+	computation_id: str = Field(default="", max_length=32)
+	reason: str = Field(default="", max_length=400)
 
 
 class DecisionRecord(BaseModel):
@@ -74,6 +103,7 @@ class CounterfactualSummary(BaseModel):
 	pitsense_projected_finish: int = Field(ge=1)
 	baseline_projected_finish: int = Field(ge=1)
 	projected_finishing_gap_seconds: float = Field(ge=0)
+	historical_finishing_gap_seconds: float = Field(default=0.0, ge=0)
 	projected_advantage_seconds: float | None = None
 	projected_gain_loss_vs_historical: int
 	decision_history: list[DecisionRecord] = Field(default_factory=list)

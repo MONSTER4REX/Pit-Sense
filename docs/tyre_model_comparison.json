@@ -1,0 +1,567 @@
+{
+  "stints_evaluated": 33,
+  "tolerance_laps": 2,
+  "drop_off_definition": {
+    "rolling_window_laps": 3,
+    "reference": "best rolling mean inside the stint's opening third (fresh-tyre pace)",
+    "margin": "max(2.0 x rolling-mean MAD, 0.30s) above that reference",
+    "confirmation_windows": 2,
+    "limitation": "Raw lap times: fuel burn partly masks degradation, so a detected drop-off is a lower bound on real tyre wear."
+  },
+  "models": [
+    {
+      "model_name": "statistical_median_mad",
+      "stints_evaluated": 33,
+      "stints_supported": 16,
+      "scorable_stints": 19,
+      "hits_within_tolerance": 7,
+      "mean_absolute_error_laps": 2.632,
+      "stint_scores": [
+        {
+          "compound": "INTERMEDIATE",
+          "stint_start_lap": 1,
+          "observed_drop_off_lap": 10,
+          "predicted_cliff_lap": 7,
+          "absolute_error_laps": 3,
+          "within_tolerance": false
+        },
+        {
+          "compound": "INTERMEDIATE",
+          "stint_start_lap": 26,
+          "observed_drop_off_lap": 34,
+          "predicted_cliff_lap": 32,
+          "absolute_error_laps": 2,
+          "within_tolerance": true
+        },
+        {
+          "compound": "MEDIUM",
+          "stint_start_lap": 46,
+          "observed_drop_off_lap": 55,
+          "predicted_cliff_lap": 54,
+          "absolute_error_laps": 1,
+          "within_tolerance": true
+        },
+        {
+          "compound": "INTERMEDIATE",
+          "stint_start_lap": 1,
+          "observed_drop_off_lap": 11,
+          "predicted_cliff_lap": 7,
+          "absolute_error_laps": 4,
+          "within_tolerance": false
+        },
+        {
+          "compound": "INTERMEDIATE",
+          "stint_start_lap": 27,
+          "observed_drop_off_lap": null,
+          "predicted_cliff_lap": 33,
+          "absolute_error_laps": null,
+          "within_tolerance": false
+        },
+        {
+          "compound": "MEDIUM",
+          "stint_start_lap": 48,
+          "observed_drop_off_lap": 57,
+          "predicted_cliff_lap": 54,
+          "absolute_error_laps": 3,
+          "within_tolerance": false
+        },
+        {
+          "compound": "SOFT",
+          "stint_start_lap": 1,
+          "observed_drop_off_lap": null,
+          "predicted_cliff_lap": null,
+          "absolute_error_laps": null,
+          "within_tolerance": false
+        },
+        {
+          "compound": "INTERMEDIATE",
+          "stint_start_lap": 3,
+          "observed_drop_off_lap": null,
+          "predicted_cliff_lap": null,
+          "absolute_error_laps": null,
+          "within_tolerance": false
+        },
+        {
+          "compound": "SOFT",
+          "stint_start_lap": 12,
+          "observed_drop_off_lap": 26,
+          "predicted_cliff_lap": 24,
+          "absolute_error_laps": 2,
+          "within_tolerance": true
+        },
+        {
+          "compound": "SOFT",
+          "stint_start_lap": 50,
+          "observed_drop_off_lap": null,
+          "predicted_cliff_lap": null,
+          "absolute_error_laps": null,
+          "within_tolerance": false
+        },
+        {
+          "compound": "INTERMEDIATE",
+          "stint_start_lap": 62,
+          "observed_drop_off_lap": null,
+          "predicted_cliff_lap": null,
+          "absolute_error_laps": null,
+          "within_tolerance": false
+        },
+        {
+          "compound": "INTERMEDIATE",
+          "stint_start_lap": 66,
+          "observed_drop_off_lap": null,
+          "predicted_cliff_lap": 69,
+          "absolute_error_laps": null,
+          "within_tolerance": false
+        },
+        {
+          "compound": "SOFT",
+          "stint_start_lap": 1,
+          "observed_drop_off_lap": null,
+          "predicted_cliff_lap": null,
+          "absolute_error_laps": null,
+          "within_tolerance": false
+        },
+        {
+          "compound": "INTERMEDIATE",
+          "stint_start_lap": 3,
+          "observed_drop_off_lap": null,
+          "predicted_cliff_lap": null,
+          "absolute_error_laps": null,
+          "within_tolerance": false
+        },
+        {
+          "compound": "SOFT",
+          "stint_start_lap": 11,
+          "observed_drop_off_lap": 25,
+          "predicted_cliff_lap": 23,
+          "absolute_error_laps": 2,
+          "within_tolerance": true
+        },
+        {
+          "compound": "SOFT",
+          "stint_start_lap": 49,
+          "observed_drop_off_lap": null,
+          "predicted_cliff_lap": null,
+          "absolute_error_laps": null,
+          "within_tolerance": false
+        },
+        {
+          "compound": "INTERMEDIATE",
+          "stint_start_lap": 62,
+          "observed_drop_off_lap": 70,
+          "predicted_cliff_lap": 66,
+          "absolute_error_laps": 4,
+          "within_tolerance": false
+        },
+        {
+          "compound": "MEDIUM",
+          "stint_start_lap": 1,
+          "observed_drop_off_lap": 7,
+          "predicted_cliff_lap": 4,
+          "absolute_error_laps": 3,
+          "within_tolerance": false
+        },
+        {
+          "compound": "HARD",
+          "stint_start_lap": 17,
+          "observed_drop_off_lap": 38,
+          "predicted_cliff_lap": null,
+          "absolute_error_laps": null,
+          "within_tolerance": false
+        },
+        {
+          "compound": "HARD",
+          "stint_start_lap": 42,
+          "observed_drop_off_lap": null,
+          "predicted_cliff_lap": null,
+          "absolute_error_laps": null,
+          "within_tolerance": false
+        },
+        {
+          "compound": "MEDIUM",
+          "stint_start_lap": 1,
+          "observed_drop_off_lap": 5,
+          "predicted_cliff_lap": 2,
+          "absolute_error_laps": 3,
+          "within_tolerance": false
+        },
+        {
+          "compound": "HARD",
+          "stint_start_lap": 10,
+          "observed_drop_off_lap": 19,
+          "predicted_cliff_lap": 18,
+          "absolute_error_laps": 1,
+          "within_tolerance": true
+        },
+        {
+          "compound": "HARD",
+          "stint_start_lap": 35,
+          "observed_drop_off_lap": 44,
+          "predicted_cliff_lap": 42,
+          "absolute_error_laps": 2,
+          "within_tolerance": true
+        },
+        {
+          "compound": "MEDIUM",
+          "stint_start_lap": 1,
+          "observed_drop_off_lap": 11,
+          "predicted_cliff_lap": 8,
+          "absolute_error_laps": 3,
+          "within_tolerance": false
+        },
+        {
+          "compound": "INTERMEDIATE",
+          "stint_start_lap": 28,
+          "observed_drop_off_lap": 36,
+          "predicted_cliff_lap": null,
+          "absolute_error_laps": null,
+          "within_tolerance": false
+        },
+        {
+          "compound": "SOFT",
+          "stint_start_lap": 39,
+          "observed_drop_off_lap": null,
+          "predicted_cliff_lap": 42,
+          "absolute_error_laps": null,
+          "within_tolerance": false
+        },
+        {
+          "compound": "MEDIUM",
+          "stint_start_lap": 1,
+          "observed_drop_off_lap": 11,
+          "predicted_cliff_lap": 7,
+          "absolute_error_laps": 4,
+          "within_tolerance": false
+        },
+        {
+          "compound": "INTERMEDIATE",
+          "stint_start_lap": 27,
+          "observed_drop_off_lap": 32,
+          "predicted_cliff_lap": 29,
+          "absolute_error_laps": 3,
+          "within_tolerance": false
+        },
+        {
+          "compound": "HARD",
+          "stint_start_lap": 39,
+          "observed_drop_off_lap": null,
+          "predicted_cliff_lap": null,
+          "absolute_error_laps": null,
+          "within_tolerance": false
+        },
+        {
+          "compound": "MEDIUM",
+          "stint_start_lap": 1,
+          "observed_drop_off_lap": 7,
+          "predicted_cliff_lap": 4,
+          "absolute_error_laps": 3,
+          "within_tolerance": false
+        },
+        {
+          "compound": "HARD",
+          "stint_start_lap": 16,
+          "observed_drop_off_lap": 41,
+          "predicted_cliff_lap": 41,
+          "absolute_error_laps": 0,
+          "within_tolerance": true
+        },
+        {
+          "compound": "MEDIUM",
+          "stint_start_lap": 1,
+          "observed_drop_off_lap": 7,
+          "predicted_cliff_lap": 4,
+          "absolute_error_laps": 3,
+          "within_tolerance": false
+        },
+        {
+          "compound": "HARD",
+          "stint_start_lap": 17,
+          "observed_drop_off_lap": 41,
+          "predicted_cliff_lap": 45,
+          "absolute_error_laps": 4,
+          "within_tolerance": false
+        }
+      ],
+      "hit_rate": 0.3684
+    },
+    {
+      "model_name": "regression_curve_fit",
+      "stints_evaluated": 33,
+      "stints_supported": 9,
+      "scorable_stints": 3,
+      "hits_within_tolerance": 3,
+      "mean_absolute_error_laps": 1.667,
+      "stint_scores": [
+        {
+          "compound": "INTERMEDIATE",
+          "stint_start_lap": 1,
+          "observed_drop_off_lap": 10,
+          "predicted_cliff_lap": 9,
+          "absolute_error_laps": 1,
+          "within_tolerance": true
+        },
+        {
+          "compound": "INTERMEDIATE",
+          "stint_start_lap": 26,
+          "observed_drop_off_lap": 34,
+          "predicted_cliff_lap": null,
+          "absolute_error_laps": null,
+          "within_tolerance": false
+        },
+        {
+          "compound": "MEDIUM",
+          "stint_start_lap": 46,
+          "observed_drop_off_lap": 55,
+          "predicted_cliff_lap": null,
+          "absolute_error_laps": null,
+          "within_tolerance": false
+        },
+        {
+          "compound": "INTERMEDIATE",
+          "stint_start_lap": 1,
+          "observed_drop_off_lap": 11,
+          "predicted_cliff_lap": null,
+          "absolute_error_laps": null,
+          "within_tolerance": false
+        },
+        {
+          "compound": "INTERMEDIATE",
+          "stint_start_lap": 27,
+          "observed_drop_off_lap": null,
+          "predicted_cliff_lap": null,
+          "absolute_error_laps": null,
+          "within_tolerance": false
+        },
+        {
+          "compound": "MEDIUM",
+          "stint_start_lap": 48,
+          "observed_drop_off_lap": 57,
+          "predicted_cliff_lap": null,
+          "absolute_error_laps": null,
+          "within_tolerance": false
+        },
+        {
+          "compound": "SOFT",
+          "stint_start_lap": 1,
+          "observed_drop_off_lap": null,
+          "predicted_cliff_lap": null,
+          "absolute_error_laps": null,
+          "within_tolerance": false
+        },
+        {
+          "compound": "INTERMEDIATE",
+          "stint_start_lap": 3,
+          "observed_drop_off_lap": null,
+          "predicted_cliff_lap": null,
+          "absolute_error_laps": null,
+          "within_tolerance": false
+        },
+        {
+          "compound": "SOFT",
+          "stint_start_lap": 12,
+          "observed_drop_off_lap": 26,
+          "predicted_cliff_lap": null,
+          "absolute_error_laps": null,
+          "within_tolerance": false
+        },
+        {
+          "compound": "SOFT",
+          "stint_start_lap": 50,
+          "observed_drop_off_lap": null,
+          "predicted_cliff_lap": null,
+          "absolute_error_laps": null,
+          "within_tolerance": false
+        },
+        {
+          "compound": "INTERMEDIATE",
+          "stint_start_lap": 62,
+          "observed_drop_off_lap": null,
+          "predicted_cliff_lap": null,
+          "absolute_error_laps": null,
+          "within_tolerance": false
+        },
+        {
+          "compound": "INTERMEDIATE",
+          "stint_start_lap": 66,
+          "observed_drop_off_lap": null,
+          "predicted_cliff_lap": null,
+          "absolute_error_laps": null,
+          "within_tolerance": false
+        },
+        {
+          "compound": "SOFT",
+          "stint_start_lap": 1,
+          "observed_drop_off_lap": null,
+          "predicted_cliff_lap": null,
+          "absolute_error_laps": null,
+          "within_tolerance": false
+        },
+        {
+          "compound": "INTERMEDIATE",
+          "stint_start_lap": 3,
+          "observed_drop_off_lap": null,
+          "predicted_cliff_lap": null,
+          "absolute_error_laps": null,
+          "within_tolerance": false
+        },
+        {
+          "compound": "SOFT",
+          "stint_start_lap": 11,
+          "observed_drop_off_lap": 25,
+          "predicted_cliff_lap": null,
+          "absolute_error_laps": null,
+          "within_tolerance": false
+        },
+        {
+          "compound": "SOFT",
+          "stint_start_lap": 49,
+          "observed_drop_off_lap": null,
+          "predicted_cliff_lap": null,
+          "absolute_error_laps": null,
+          "within_tolerance": false
+        },
+        {
+          "compound": "INTERMEDIATE",
+          "stint_start_lap": 62,
+          "observed_drop_off_lap": 70,
+          "predicted_cliff_lap": 68,
+          "absolute_error_laps": 2,
+          "within_tolerance": true
+        },
+        {
+          "compound": "MEDIUM",
+          "stint_start_lap": 1,
+          "observed_drop_off_lap": 7,
+          "predicted_cliff_lap": null,
+          "absolute_error_laps": null,
+          "within_tolerance": false
+        },
+        {
+          "compound": "HARD",
+          "stint_start_lap": 17,
+          "observed_drop_off_lap": 38,
+          "predicted_cliff_lap": null,
+          "absolute_error_laps": null,
+          "within_tolerance": false
+        },
+        {
+          "compound": "HARD",
+          "stint_start_lap": 42,
+          "observed_drop_off_lap": null,
+          "predicted_cliff_lap": null,
+          "absolute_error_laps": null,
+          "within_tolerance": false
+        },
+        {
+          "compound": "MEDIUM",
+          "stint_start_lap": 1,
+          "observed_drop_off_lap": 5,
+          "predicted_cliff_lap": 3,
+          "absolute_error_laps": 2,
+          "within_tolerance": true
+        },
+        {
+          "compound": "HARD",
+          "stint_start_lap": 10,
+          "observed_drop_off_lap": 19,
+          "predicted_cliff_lap": null,
+          "absolute_error_laps": null,
+          "within_tolerance": false
+        },
+        {
+          "compound": "HARD",
+          "stint_start_lap": 35,
+          "observed_drop_off_lap": 44,
+          "predicted_cliff_lap": null,
+          "absolute_error_laps": null,
+          "within_tolerance": false
+        },
+        {
+          "compound": "MEDIUM",
+          "stint_start_lap": 1,
+          "observed_drop_off_lap": 11,
+          "predicted_cliff_lap": null,
+          "absolute_error_laps": null,
+          "within_tolerance": false
+        },
+        {
+          "compound": "INTERMEDIATE",
+          "stint_start_lap": 28,
+          "observed_drop_off_lap": 36,
+          "predicted_cliff_lap": null,
+          "absolute_error_laps": null,
+          "within_tolerance": false
+        },
+        {
+          "compound": "SOFT",
+          "stint_start_lap": 39,
+          "observed_drop_off_lap": null,
+          "predicted_cliff_lap": null,
+          "absolute_error_laps": null,
+          "within_tolerance": false
+        },
+        {
+          "compound": "MEDIUM",
+          "stint_start_lap": 1,
+          "observed_drop_off_lap": 11,
+          "predicted_cliff_lap": null,
+          "absolute_error_laps": null,
+          "within_tolerance": false
+        },
+        {
+          "compound": "INTERMEDIATE",
+          "stint_start_lap": 27,
+          "observed_drop_off_lap": 32,
+          "predicted_cliff_lap": null,
+          "absolute_error_laps": null,
+          "within_tolerance": false
+        },
+        {
+          "compound": "HARD",
+          "stint_start_lap": 39,
+          "observed_drop_off_lap": null,
+          "predicted_cliff_lap": null,
+          "absolute_error_laps": null,
+          "within_tolerance": false
+        },
+        {
+          "compound": "MEDIUM",
+          "stint_start_lap": 1,
+          "observed_drop_off_lap": 7,
+          "predicted_cliff_lap": null,
+          "absolute_error_laps": null,
+          "within_tolerance": false
+        },
+        {
+          "compound": "HARD",
+          "stint_start_lap": 16,
+          "observed_drop_off_lap": 41,
+          "predicted_cliff_lap": null,
+          "absolute_error_laps": null,
+          "within_tolerance": false
+        },
+        {
+          "compound": "MEDIUM",
+          "stint_start_lap": 1,
+          "observed_drop_off_lap": 7,
+          "predicted_cliff_lap": null,
+          "absolute_error_laps": null,
+          "within_tolerance": false
+        },
+        {
+          "compound": "HARD",
+          "stint_start_lap": 17,
+          "observed_drop_off_lap": 41,
+          "predicted_cliff_lap": null,
+          "absolute_error_laps": null,
+          "within_tolerance": false
+        }
+      ],
+      "hit_rate": 1.0
+    }
+  ],
+  "winning_model": "statistical_median_mad",
+  "winner_is_decisive": true,
+  "selection_criterion": "Most correct calls in absolute terms, then lowest mean error. This favours a model that answers more often over one that answers rarely but precisely, because a model that declines to predict leaves the engine with no degradation input at all.",
+  "selection_note": "statistical_median_mad selected. statistical_median_mad: 7 correct of 19 scorable stints (37%), mean error 2.632 laps | regression_curve_fit: 3 correct of 3 scorable stints (100%), mean error 1.667 laps"
+}

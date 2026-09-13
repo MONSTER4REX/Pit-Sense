@@ -1,0 +1,77 @@
+[
+  {
+    "year": 2024,
+    "event": "Canadian Grand Prix",
+    "track_xy_samples": 586,
+    "track_xy_available": true,
+    "corner_count": 14,
+    "rotation_degrees": 62.0,
+    "circuit_info_available": true,
+    "pit_lane": {
+      "in_lap_traces": 3,
+      "out_lap_traces": 3,
+      "pit_lane_available": true
+    },
+    "verified_for_simulation_lab": true
+  },
+  {
+    "year": 2023,
+    "event": "Dutch Grand Prix",
+    "track_xy_samples": 560,
+    "track_xy_available": true,
+    "corner_count": 14,
+    "rotation_degrees": 0.0,
+    "circuit_info_available": true,
+    "pit_lane": {
+      "in_lap_traces": 3,
+      "out_lap_traces": 3,
+      "pit_lane_available": true
+    },
+    "verified_for_simulation_lab": true
+  },
+  {
+    "year": 2024,
+    "event": "Australian Grand Prix",
+    "track_xy_samples": 598,
+    "track_xy_available": true,
+    "corner_count": 14,
+    "rotation_degrees": 44.0,
+    "circuit_info_available": true,
+    "pit_lane": {
+      "in_lap_traces": 3,
+      "out_lap_traces": 3,
+      "pit_lane_available": true
+    },
+    "verified_for_simulation_lab": true
+  },
+  {
+    "year": 2024,
+    "event": "British Grand Prix",
+    "track_xy_samples": 675,
+    "track_xy_available": true,
+    "corner_count": 18,
+    "rotation_degrees": 92.0,
+    "circuit_info_available": true,
+    "pit_lane": {
+      "in_lap_traces": 3,
+      "out_lap_traces": 3,
+      "pit_lane_available": true
+    },
+    "verified_for_simulation_lab": true
+  },
+  {
+    "year": 2024,
+    "event": "Azerbaijan Grand Prix",
+    "track_xy_samples": 817,
+    "track_xy_available": true,
+    "corner_count": 20,
+    "rotation_degrees": 357.0,
+    "circuit_info_available": true,
+    "pit_lane": {
+      "in_lap_traces": 3,
+      "out_lap_traces": 3,
+      "pit_lane_available": true
+    },
+    "verified_for_simulation_lab": true
+  }
+]

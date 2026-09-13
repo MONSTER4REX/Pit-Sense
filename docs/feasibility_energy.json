@@ -1,0 +1,130 @@
+{
+  "verdict": "UNAVAILABLE - FastF1 exposes no fuel, energy-store, or ERS-deployment channel for these 2023-2024 sessions. Per PRD 5.K this is reported as a limitation and no energy UI is built; nothing is fabricated.",
+  "races": [
+    {
+      "year": 2024,
+      "event": "Canadian Grand Prix",
+      "telemetry_columns": [
+        "Date",
+        "RPM",
+        "Speed",
+        "nGear",
+        "Throttle",
+        "Brake",
+        "DRS",
+        "Source",
+        "Time",
+        "SessionTime"
+      ],
+      "proxy_channels_found": [
+        "RPM",
+        "Throttle",
+        "Brake",
+        "DRS",
+        "nGear",
+        "Speed"
+      ],
+      "energy_channels_found": []
+    },
+    {
+      "year": 2023,
+      "event": "Dutch Grand Prix",
+      "telemetry_columns": [
+        "Date",
+        "RPM",
+        "Speed",
+        "nGear",
+        "Throttle",
+        "Brake",
+        "DRS",
+        "Source",
+        "Time",
+        "SessionTime"
+      ],
+      "proxy_channels_found": [
+        "RPM",
+        "Throttle",
+        "Brake",
+        "DRS",
+        "nGear",
+        "Speed"
+      ],
+      "energy_channels_found": []
+    },
+    {
+      "year": 2024,
+      "event": "Australian Grand Prix",
+      "telemetry_columns": [
+        "Date",
+        "RPM",
+        "Speed",
+        "nGear",
+        "Throttle",
+        "Brake",
+        "DRS",
+        "Source",
+        "Time",
+        "SessionTime"
+      ],
+      "proxy_channels_found": [
+        "RPM",
+        "Throttle",
+        "Brake",
+        "DRS",
+        "nGear",
+        "Speed"
+      ],
+      "energy_channels_found": []
+    },
+    {
+      "year": 2024,
+      "event": "British Grand Prix",
+      "telemetry_columns": [
+        "Date",
+        "RPM",
+        "Speed",
+        "nGear",
+        "Throttle",
+        "Brake",
+        "DRS",
+        "Source",
+        "Time",
+        "SessionTime"
+      ],
+      "proxy_channels_found": [
+        "RPM",
+        "Throttle",
+        "Brake",
+        "DRS",
+        "nGear",
+        "Speed"
+      ],
+      "energy_channels_found": []
+    },
+    {
+      "year": 2024,
+      "event": "Azerbaijan Grand Prix",
+      "telemetry_columns": [
+        "Date",
+        "RPM",
+        "Speed",
+        "nGear",
+        "Throttle",
+        "Brake",
+        "DRS",
+        "Source",
+        "Time",
+        "SessionTime"
+      ],
+      "proxy_channels_found": [
+        "RPM",
+        "Throttle",
+        "Brake",
+        "DRS",
+        "nGear",
+        "Speed"
+      ],
+      "energy_channels_found": []
+    }
+  ]
+}

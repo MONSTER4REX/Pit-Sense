@@ -1,4 +1,11 @@
-const JSON_HEADERS = { "Content-Type": "application/json" };
+/*
+ * The only place the frontend talks to the backend.
+ *
+ * Every strategy call takes a lap number and nothing else. The backend derives
+ * that lap's compound, tyre age, gaps, rival state, and stint history from the
+ * loaded session itself (PRD section 5), so the frontend cannot assemble - and
+ * therefore cannot get wrong - any authoritative race state.
+ */
 
 async function parseOrThrow(response) {
 	if (!response.ok) {
@@ -8,59 +15,46 @@ async function parseOrThrow(response) {
 	return response.json();
 }
 
-export function fetchRecommendation(request, signal) {
-	return fetch("/api/strategy/recommendation", {
+function getJson(path, signal) {
+	return fetch(path, { signal }).then(parseOrThrow);
+}
+
+function postJson(path, body, signal) {
+	return fetch(path, {
 		method: "POST",
-		headers: JSON_HEADERS,
-		body: JSON.stringify(request),
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify(body),
 		signal,
 	}).then(parseOrThrow);
 }
 
-export function fetchWhatIf(request, signal) {
-	return fetch("/api/strategy/what-if", {
-		method: "POST",
-		headers: JSON_HEADERS,
-		body: JSON.stringify(request),
-		signal,
-	}).then(parseOrThrow);
-}
+export const fetchAvailableRaces = (signal) => getJson("/api/races/available", signal);
 
-export function injectShockEvent(eventType, lapNumber, signal) {
-	const params = new URLSearchParams({ event_type: eventType, lap_number: String(lapNumber) });
-	return fetch(`/api/timeline/shock?${params.toString()}`, { method: "POST", signal }).then(parseOrThrow);
-}
+export const loadRaceSession = (year, eventName, signal) =>
+	getJson(`/api/race/${year}/${encodeURIComponent(eventName)}/session`, signal);
 
-export function fetchTimeline(signal) {
-	return fetch("/api/timeline", { signal }).then(parseOrThrow);
-}
+export const fetchCircuitData = (year, eventName, signal) =>
+	getJson(`/api/circuit/${year}/${encodeURIComponent(eventName)}`, signal);
 
-export function fetchAvailableRaces(signal) {
-	return fetch("/api/races/available", { signal }).then(parseOrThrow);
-}
+export const fetchRecommendation = (lap, signal) =>
+	getJson(`/api/strategy/recommendation?lap=${lap}`, signal);
 
-export function loadRaceSession(year, eventName, signal) {
-	return fetch(`/api/race/${year}/${encodeURIComponent(eventName)}/session`, { signal }).then(parseOrThrow);
-}
+export const fetchWhatIf = (lap, signal) => getJson(`/api/strategy/what-if?lap=${lap}`, signal);
 
-export function injectSimulationShock(eventType, lap, signal) {
-	return fetch("/api/simulation/shock", {
-		method: "POST",
-		headers: JSON_HEADERS,
-		body: JSON.stringify({ event_type: eventType, lap }),
-		signal,
-	}).then(parseOrThrow);
-}
+export const fetchTimeline = (signal) => getJson("/api/timeline", signal);
 
-export function acceptSimulationDecision(action, lap, signal) {
-	return fetch("/api/simulation/decision", {
-		method: "POST",
-		headers: JSON_HEADERS,
-		body: JSON.stringify({ action, lap }),
-		signal,
-	}).then(parseOrThrow);
-}
+export const fetchTyreModelStatus = (signal) => getJson("/api/model/tyre", signal);
 
-export function fetchCounterfactualSummary(signal) {
-	return fetch("/api/simulation/counterfactual", { signal }).then(parseOrThrow);
-}
+export const injectSimulationShock = (eventType, lap, signal) =>
+	postJson("/api/simulation/shock", { event_type: eventType, lap }, signal);
+
+export const acceptSimulationDecision = (action, lap, signal) =>
+	postJson("/api/simulation/decision", { action, lap }, signal);
+
+export const fetchCounterfactualSummary = (signal) =>
+	getJson("/api/simulation/counterfactual", signal);
+
+export const fetchSimulationAssumptions = (signal) =>
+	getJson("/api/simulation/assumptions", signal);
+
+export const fetchReoptimizations = (signal) => getJson("/api/simulation/reoptimizations", signal);

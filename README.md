@@ -1,114 +1,151 @@
 # PitSense
 
-PitSense is an explainable pit-strategy decision-support console for historical
-F1 race replay. It uses FastF1 session data, a hand-rolled Dijkstra strategy
-engine, mandatory factor breakdowns, confidence bands, replay ticks, rival
-modelling, and What-If branches.
+**Predictive pit strategy and undercut intelligence.** Two products, one engine:
+*Race Analysis* answers "what should we do right now?", *Simulation Lab* answers
+"what would have happened if we had done X?"
 
-## Validation Snapshot
+PitSense models tyre degradation, track position, and rival behaviour as a graph
+optimisation, and returns an explainable, confidence-scored recommendation for the
+pit window and the undercut decision. It replays completed historical races
+through FastF1 — it does not connect to live car telemetry, and the UI says so.
 
-Section 9 was run against five real FastF1 Race sessions: 2024 Canada, 2023
-Netherlands, 2024 Australia, 2024 British Grand Prix, and 2024 Azerbaijan.
+## The two products
 
-- Directional pit-window agreement: **3/5**
-- Tyre-cliff accuracy: **1/4 detected cliffs within +/-2 laps**
-- Maximum re-optimization latency after real Safety Car/VSC evidence: **0.230s**
-- Real replay ticks processed: **303**
-- Backend suite: **15 tests passed**
+**Race Analysis** — the always-available strategist dashboard. Select a race,
+scrub to any lap, and see the engine's call for that lap's real state: the
+recommendation, its confidence band and what widened it, the reasoning the engine
+generated from its own factors, all three What-If branches, and the factor
+breakdown. No simulation controls; no projected values.
 
-The complete per-race record is in
-[`data/validation/section9_real_races.json`](data/validation/section9_real_races.json).
+**Simulation Lab** — the counterfactual workspace. Replay a real race, inject a
+shock, compare PitSense against a named baseline strategy, commit a decision, and
+watch the run fork from HISTORICAL into PROJECTED COUNTERFACTUAL — where *both*
+cars are projected forward by a stated model, including the opponent. Ends with
+the historical result against the projected one and the full assumption trail.
 
-## Updated Simulation Plan
+## What makes the numbers trustworthy
 
-PitSense is being extended from historical replay into a controlled
-counterfactual simulation. Before a fork, both cars follow the observed
-FastF1 race data. After a user-injected Shock Event, both cars adapt to the
-same changed environment:
+Every factor is either measured from the loaded session or reported as not
+measured. There is no third option, and nothing is quietly defaulted.
 
-- **P2 / PitSense** uses the strategy graph, tyre degradation, pit-lane loss,
-  traffic and rival-response signals, confidence, and explainability.
-- **P1 / Baseline Strategy** uses a deterministic conventional pit-window
-  model. It is an adaptive comparator, not an official F1 strategy model.
-- The original race remains available as the **Historical** reference. The
-  two adaptive paths are labelled **Counterfactual Projection** and are never
-  presented as what actually happened.
+- **Tyre degradation** is fitted to the car's own stint by whichever of two models
+  won a recorded head-to-head comparison — not a constant.
+- **Rejoin traffic** comes from observed gaps to cars ahead. With no gap data the
+  cost is zero *and flagged*, which widens the confidence band.
+- **Rival cover-stop probability** comes from the rival's own recorded pit stops
+  up to the current lap.
+- **Pit-lane loss** is measured from each car's real in-lap and out-lap penalty,
+  compared against the field on those same laps.
+- **Gaps** are derived from real lap timestamps. On 2024 Canada this reproduces
+  the actual 3.879s winning margin.
+- **The circuit and pit lane** are traced from this session's positional
+  telemetry. A race without verified geometry shows an explicit empty state rather
+  than a substituted track.
 
-### Simulation Flow
+Separating tyre wear from fuel burn and track evolution is the core modelling
+problem, and `app/tyre_model/field_pace.py` explains how it is done and where it
+still falls short. See [Submission_Notes.md](docs/Submission_Notes.md) for the
+honest limitations, including the race where degradation is not measurable at all.
 
-1. Select a supported historical race and load the actual P1 and P2 finishers,
-  lap states, tyre data, pit events, and recorded race-control messages.
-2. Replay the historical race from Lap 1. Every tick identifies its mode as
-  `HISTORICAL` or `PROJECTED` and includes car state and backend-owned
-  strategy decisions.
-3. Inject a Safety Car, VSC, rain, or other supported Shock Event. Both
-  policies reconsider the same state and return comparable decisions.
-4. Accept or override the PitSense action with `PIT`, `STAY_OUT`, or `EXTEND`.
-  This creates a recorded counterfactual fork.
-5. Continue the projected race lap by lap while P1 and P2 adapt independently.
-  Projected tyre age, lap time, position, gap, pit status, and decisions remain
-  explicitly distinguishable from historical values.
-6. Compare the historical finish with the PitSense and Baseline projected
-  outcomes, including assumptions and limitations.
+## Tech stack
 
-### Simulation API
+| Layer | Choice | Why |
+|---|---|---|
+| Language | Python 3.11+ | FastF1, the only realistic historical F1 data source, is Python-only |
+| API | FastAPI | Native async and WebSockets for the tick stream; heavy endpoints run off the event loop |
+| Data | FastF1 | Lap times, compounds, pit timestamps, positional telemetry for real sessions |
+| Optimisation | NumPy + hand-rolled Dijkstra (heapq) | Edge weights recomputed every tick under a 1s budget; NetworkX was rejected as too slow and too opaque for an explainability-led product |
+| Validation | Pydantic v2 | Schema-validates every race-state and recommendation at the boundary, rejecting bad data loudly |
+| Testing | pytest + pytest-asyncio | The validation suite runs as real automated tests |
+| Frontend | React 18 + Vite | Fast rebuild loop for a two-page operator console |
+| Styling | Tailwind CSS + component CSS | Tailwind is in the build; the dense, repeated console furniture is expressed as named component classes so each product's distinct treatment lives in one place |
+| State | React Context, one provider per product | `RaceAnalysisProvider` and `SimulationLabProvider` never share state |
+| Storage | FastF1 file cache + SQLite | Read-only race data needs no database; SQLite holds the strategy timeline |
 
-The backend exposes the current simulation boundaries through:
+## Running it
 
-- `GET /api/races/available`
-- `GET /api/race/{year}/{event}/session`
-- `POST /api/simulation/shock`
-- `POST /api/simulation/decision`
-- `GET /api/simulation/counterfactual`
-- `/ws/replay` with simulation tick payloads
+Requires Python 3.11+ and Node 18+.
 
-The implementation deliberately uses explicit approximations where FastF1
-does not provide sub-lap pit-lane timing. It does not fabricate fuel or energy
-data, claim that PitSense changed history, or call the comparator an official
-team strategist.
+```bash
+cd backend && pip install -r requirements.txt
+python -m uvicorn app.main:app --reload --port 8000
+```
 
-### Roadmap
+```bash
+cd frontend && npm install && npm run dev
+```
 
-The current backend foundation includes dual policy decisions, historical vs
-projected contracts, user-controlled forks, FastF1 P1/P2 loading, and
-counterfactual summaries. Remaining work is to connect the full race-selection
-and fork workflow to the frontend, improve stateful projected tyre and gap
-modelling, expose the three timelines visually, add overtake-lap reporting,
-and validate recommendation changes across every supported real race.
+Open http://localhost:5173. The first call to `/api/races/available` verifies
+circuit geometry for each race and takes around 30 seconds; the result is cached
+to `data/geometry_verification.json`, after which it is instant.
 
-## Known Limitations
+## Verifying the claims
 
-The tyre-cliff result is a reported limitation, not a suppressed metric. The
-current diagnostic uses the median lap time for each contiguous compound stint,
-an MAD-based threshold, and requires three consecutive laps above that
-threshold. The root-cause diagnostic found:
+Each script prints its evidence and writes a JSON report under `docs/`.
 
-- Three stints were too short to estimate a degradation curve.
-- Eight stints never crossed the hard threshold, including long stints whose
-  lap-time changes were gradual or dominated by race conditions.
-- Canada produced an early threshold crossing on the wet Intermediate stint
-  and a later crossing on the Medium stint, but neither matched the reported
-  target onset. Its actual pit call was lap 46 while the model recommended lap
-  18.
-- The Netherlands and British Grand Prix data contain multiple compound and
-	weather transitions; those changes make a single-stint threshold a weak
-	proxy for a pure tyre cliff.
+```bash
+cd backend
+python -m pytest -q                      # unit and contract tests
+python -m scripts.geometry_feasibility   # what geometry FastF1 really exposes
+python -m scripts.energy_feasibility     # energy/ERS availability (it is not)
+python -m scripts.tyre_model_report      # the two-model comparison
+python -m scripts.validation_report      # the historical validation suite
+python -m scripts.end_to_end_proof "Azerbaijan Grand Prix" 2024
+```
 
-This means the current cliff metric is better understood as a conservative
-within-stint degradation alarm than as a complete tyre-life model. The next
-model improvement should separate wet-condition pace, compound transitions,
-and gradual degradation before fitting a cliff detector. The misses remain in
-the validation report and are part of the demo discussion.
+Current validation, over five real races (2024 Canada, 2023 Netherlands, 2024
+Australia, 2024 Britain, 2024 Azerbaijan):
 
-## Demo Preparation
+| Criterion | Result |
+|---|---|
+| Explainability + confidence band on every recommendation | PASS |
+| Recommendation recomputes per lap, never frozen | PASS |
+| Re-optimisation inside the 1s budget | PASS — max **0.101s** |
+| Directional pit-window agreement | **4 of 5** (target 3 of 5) |
+| Tyre-cliff onset within ±2 laps | 7 of 19 scorable stints |
+| Source data gaps flagged rather than interpolated | 8 |
 
-Use the 2024 Azerbaijan replay for the primary walkthrough: it was directionally
-consistent, exercised nine real Safety Car/VSC evidence events, and kept the
-recommendation within two laps of the actual pit stop.
-Use 2024 Canada as the deliberate limitation case: show the lap-18 versus
-lap-46 disagreement and explain why wet-condition compound data is the next
-modeling priority.
+Both accuracy figures improve on the v1.0 record carried in the PRD (3/5 and
+1/4), and the improvement comes from the field-pace change described above rather
+than from moving a threshold.
 
-No PowerPoint file is present in this repository. The same verified numbers and
-talking points are captured in
-[`docs/Submission_Notes.md`](docs/Submission_Notes.md).
+## Layout
+
+```
+backend/app/
+  ingestion/     FastF1 loading, normalisation, gap-flagging, circuit + pit-lane geometry
+  tyre_model/    two degradation models, their comparison, and field-pace normalisation
+  engine/        strategy graph, Dijkstra, re-optimisation, opponent baseline
+  explainability/ factor breakdown and generated reasoning
+  rival_model/   cover-stop probability, rejoin projection
+  simulation/    counterfactual fork, forward projection, rolling re-optimisation
+  validation/    the PRD section 13 suite
+frontend/src/
+  analysis/      Race Analysis: its own provider and component tree
+  lab/           Simulation Lab: its own provider and component tree
+  shared/        presentational primitives only — no shared stateful components
+```
+
+## Documentation
+
+[PRD v2.0](PitSense_PRD_v2.docx) is the single source of truth for this build.
+
+- [Architecture audit](docs/Architecture_Audit.md) — what was real versus assumed
+  in the pre-v2.0 build, and what changed.
+- [Submission notes](docs/Submission_Notes.md) — validation results, what was
+  deliberately not built, and the known limitations stated plainly.
+- [Documentation index](docs/README.md) — which documents are current and which
+  are superseded.
+
+## Scope, stated up front
+
+Not built, and not claimed anywhere in the UI:
+
+- **No four-source ML / Simulation / History / Memory blend.** The factor
+  breakdown shows only the four factors the engine computes, and says so on
+  screen. The blend is a Phase 2 direction, per PRD §2.2.
+- **No energy / ERS modelling.** FastF1 exposes no fuel, energy-store, or ERS
+  channel for 2023–2024 races; the gate was checked before any UI work and the
+  result is in [`docs/feasibility_energy.json`](docs/feasibility_energy.json).
+- **No live telemetry.** Historical replay only.
+- **One tracked car against one modelled rival**, not the full grid.

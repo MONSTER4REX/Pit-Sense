@@ -24,6 +24,9 @@ class LapState(BaseModel):
 	compound: Optional[str] = None
 	tyre_life: Optional[int] = Field(default=None, ge=0)
 	position: Optional[int] = Field(default=None, ge=1)
+	# Session clock at the end of this lap. FastF1 provides this directly, and it
+	# is what the gap below is computed from - FastF1 exposes no gap column.
+	session_time_seconds: Optional[float] = Field(default=None, gt=0)
 	gap_to_leader_seconds: Optional[float] = Field(default=None, ge=0)
 	sector_times_seconds: Dict[str, Optional[float]] = Field(default_factory=dict)
 

@@ -40,3 +40,7 @@ class TimelineLogger:
 				"SELECT event_type, lap_number, detail, timestamp FROM timeline_events ORDER BY id"
 			).fetchall()
 		return [TimelineEvent(*row) for row in rows]
+
+	def clear(self) -> None:
+		with sqlite3.connect(self.database_path) as connection:
+			connection.execute("DELETE FROM timeline_events")
