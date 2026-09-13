@@ -41,7 +41,13 @@ ROLLING_WINDOW = 3
 # PRD 13 success criterion: cliff prediction within +/- 2 laps of observed onset.
 ACCURACY_TOLERANCE_LAPS = 2
 
-COMPARISON_REPORT_PATH = Path(__file__).resolve().parents[3] / "docs" / "tyre_model_comparison.json"
+# The comparison decides which model feeds the engine, so it has to travel with
+# the code. It used to live only under docs/, which is outside the deployed image
+# entirely - so a deployed instance silently fell back to the incumbent model and
+# told the user to go and run a script. The packaged copy is the one the app
+# reads; the docs copy is written alongside it for humans.
+PACKAGED_REPORT_PATH = Path(__file__).resolve().parents[1] / "data" / "tyre_model_comparison.json"
+DOCS_REPORT_PATH = Path(__file__).resolve().parents[3] / "docs" / "tyre_model_comparison.json"
 
 
 @dataclass(frozen=True)
@@ -224,15 +230,20 @@ def _selection_note(ranked: Sequence[ModelAccuracy], decisive: bool) -> str:
 
 def load_comparison_report() -> dict[str, object] | None:
 	"""Read the most recent recorded comparison, or None if none has been run."""
-	if not COMPARISON_REPORT_PATH.exists():
-		return None
-	try:
-		return json.loads(COMPARISON_REPORT_PATH.read_text(encoding="utf-8"))
-	except (OSError, ValueError):
-		return None
+	for path in (PACKAGED_REPORT_PATH, DOCS_REPORT_PATH):
+		if not path.exists():
+			continue
+		try:
+			return json.loads(path.read_text(encoding="utf-8"))
+		except (OSError, ValueError):
+			continue
+	return None
 
 
 def save_comparison_report(report: dict[str, object]) -> Path:
-	COMPARISON_REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
-	COMPARISON_REPORT_PATH.write_text(json.dumps(report, indent=2), encoding="utf-8")
-	return COMPARISON_REPORT_PATH
+	"""Write the report where the app reads it, and where a human reads it."""
+	body = json.dumps(report, indent=2)
+	for path in (PACKAGED_REPORT_PATH, DOCS_REPORT_PATH):
+		path.parent.mkdir(parents=True, exist_ok=True)
+		path.write_text(body, encoding="utf-8")
+	return PACKAGED_REPORT_PATH
