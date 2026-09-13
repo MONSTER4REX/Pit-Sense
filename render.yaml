@@ -1,0 +1,25 @@
+# Render blueprint: https://render.com/docs/blueprint-spec
+#
+# One Docker service, one process. There is no database and no disk to attach:
+# the validated races ship inside the image as an exported bundle, and the only
+# thing written at runtime is the strategy timeline, which goes to /tmp and is
+# expected not to survive a restart.
+#
+# numInstances is pinned to 1 on purpose. Each visitor's loaded race lives in
+# this process's memory (backend/app/session_store.py), so a second instance
+# would serve some visitors an empty slot.
+
+services:
+  - type: web
+    name: pitsense
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: free
+    region: frankfurt
+    numInstances: 1
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: PITSENSE_DB_PATH
+        value: /tmp/pitsense.sqlite3

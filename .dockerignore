@@ -1,0 +1,17 @@
+# The FastF1 cache is ~600MB and the deployed app does not use it: the validated
+# races are served from the exported bundle in backend/app/data/races.
+data/
+**/__pycache__/
+**/*.pyc
+.pytest_cache/
+.venv/
+frontend/node_modules/
+frontend/dist/
+backend/tests/
+backend/scripts/
+docs/
+files/
+*.sqlite3
+*.docx
+.git/
+.github/

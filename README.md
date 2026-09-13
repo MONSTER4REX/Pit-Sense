@@ -82,6 +82,37 @@ Open http://localhost:5173. The first call to `/api/races/available` verifies
 circuit geometry for each race and takes around 30 seconds; the result is cached
 to `data/geometry_verification.json`, after which it is instant.
 
+## Deploying it
+
+The app deploys as **one container on one port**: FastAPI serves both the API and
+the built frontend, so there is no second service and no CORS to configure.
+
+It carries the five validated races as an exported bundle
+(`backend/app/data/races`, ~490 KB, written by `scripts.export_race_bundle`), so
+a deployed instance needs **no FastF1 cache, no downloads at request time, and no
+dependency on an upstream API staying up during a demo**. That is what keeps the
+image at ~350 MB and the first page load instant rather than a 30-second stall.
+
+```bash
+docker build -t pitsense .
+docker run -p 8000:8000 pitsense     # then open http://localhost:8000
+```
+
+**On Render** — the repository contains `render.yaml`, so: New → Blueprint →
+point it at this repo → Apply. It builds the Dockerfile and gives you a URL.
+
+**Two constraints any host has to respect:**
+
+1. **One instance, one worker.** Each visitor's loaded race lives in that
+   process's memory (`backend/app/session_store.py`), so a second worker would
+   serve some visitors an empty slot. `render.yaml` pins `numInstances: 1`.
+2. **No persistent disk needed.** The only runtime write is the strategy
+   timeline, which goes to `PITSENSE_DB_PATH` (default `/tmp`) and is not
+   expected to survive a restart.
+
+Visitors are isolated from each other by a session cookie, so two people on the
+same URL can load different races without overwriting one another.
+
 ## Verifying the claims
 
 Each script prints its evidence and writes a JSON report under `docs/`.

@@ -11,7 +11,11 @@ from __future__ import annotations
 import asyncio
 from time import perf_counter
 
-from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
+from pathlib import Path
+
+from fastapi import FastAPI, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from app.engine.reoptimizer import optimize_strategy
@@ -27,17 +31,38 @@ from app.simulation.engine import SimulationEngine
 from app.timeline.logger import TimelineLogger
 from app.tyre_model.active import active_model_selection
 from app.tyre_model.comparison import load_comparison_report
+from app.ingestion import bundle
+from app.session_store import COOKIE_NAME, VisitorState, new_session_id, store
 from app.whatif.simulator import compare_branches
 
 app = FastAPI(title="PitSense Historical Strategy Console", version="2.0.0")
 
 timeline = TimelineLogger()
-active_simulation: SimulationEngine | None = None
-active_session_context: SessionReplayContext | None = None
-active_historical_events: list[dict[str, str]] = []
 
-# Cache for the expensive telemetry download, one entry per event.
-_circuit_cache: dict[str, dict[str, object]] = {}
+
+@app.middleware("http")
+async def attach_session_cookie(request: Request, call_next):
+	"""Give every visitor their own slot, so two people on one URL do not share
+	a loaded race (see app.session_store)."""
+	session_id = request.cookies.get(COOKIE_NAME) or new_session_id()
+	request.state.session_id = session_id
+	response = await call_next(request)
+	response.set_cookie(
+		COOKIE_NAME,
+		session_id,
+		max_age=60 * 60 * 8,
+		httponly=True,
+		samesite="lax",
+	)
+	return response
+
+
+def session_id(request: Request) -> str:
+	return getattr(request.state, "session_id", "anonymous")
+
+
+def visitor(request: Request) -> VisitorState:
+	return store.get(session_id(request))
 
 
 class ShockRequest(BaseModel):
@@ -50,16 +75,16 @@ class DecisionRequest(BaseModel):
 	action: str
 
 
-def _require_simulation() -> SimulationEngine:
-	if active_simulation is None:
+def _require_simulation(state: VisitorState) -> SimulationEngine:
+	if state.simulation is None:
 		raise HTTPException(status_code=409, detail="Load a historical race session first")
-	return active_simulation
+	return state.simulation
 
 
-def _require_context() -> SessionReplayContext:
-	if active_session_context is None:
+def _require_context(state: VisitorState) -> SessionReplayContext:
+	if state.context is None:
 		raise HTTPException(status_code=409, detail="Load a historical race session first")
-	return active_session_context
+	return state.context
 
 
 def _engine_inputs(ctx: SessionReplayContext, lap: int) -> dict:
@@ -99,26 +124,30 @@ async def tyre_model_status() -> dict[str, object]:
 
 @app.get("/api/races/available")
 def available_races() -> list[dict[str, object]]:
-	return list_race_availability()
+	# The bundle already carries verified geometry flags, so a deployed instance
+	# answers this instantly instead of loading telemetry for five races.
+	return bundle.availability() if bundle.is_available() else list_race_availability()
 
 
 @app.get("/api/race/{year}/{event_name}/session")
-def race_session(year: int, event_name: str) -> dict[str, object]:
-	global active_historical_events, active_simulation, active_session_context
-	try:
-		session = load_historical_session(year, event_name)
-	except (RuntimeError, ValueError) as exc:
-		raise HTTPException(status_code=503, detail=str(exc)) from exc
+def race_session(year: int, event_name: str, request: Request) -> dict[str, object]:
+	state = visitor(request)
+	session = bundle.load_session(year, event_name)
+	if session is None:
+		try:
+			session = load_historical_session(year, event_name)
+		except (RuntimeError, ValueError) as exc:
+			raise HTTPException(status_code=503, detail=str(exc)) from exc
 
-	timeline.clear()
-	active_simulation = SimulationEngine(
+	timeline.clear(getattr(request.state, "session_id", "anonymous"))
+	state.simulation = SimulationEngine(
 		session.p1, session.p2, field_median_lap_times=session.field_median_lap_times
 	)
-	active_historical_events = session.historical_events
-	active_session_context = SessionReplayContext(
+	state.historical_events = session.historical_events
+	state.context = SessionReplayContext(
 		p1=session.p1,
 		p2=session.p2,
-		end_lap=active_simulation.end_lap,
+		end_lap=state.simulation.end_lap,
 		field_median_lap_times=session.field_median_lap_times,
 	)
 
@@ -133,7 +162,7 @@ def race_session(year: int, event_name: str) -> dict[str, object]:
 		"p1_team": session.p1_team,
 		"p2_driver": session.p2_name,
 		"p2_team": session.p2_team,
-		"total_laps": active_simulation.end_lap,
+		"total_laps": state.simulation.end_lap,
 		"p1_laps": len(session.p1.laps),
 		"p2_laps": len(session.p2.laps),
 		"p1_lap_states": [lap.model_dump(mode="json") for lap in session.p1.laps],
@@ -142,28 +171,26 @@ def race_session(year: int, event_name: str) -> dict[str, object]:
 		"p2_pit_stops": [stop.model_dump(mode="json") for stop in session.p2.pit_stops],
 		"p1_data_gaps": [gap.model_dump(mode="json") for gap in session.p1.data_gaps],
 		"p2_data_gaps": [gap.model_dump(mode="json") for gap in session.p2.data_gaps],
-		"historical_events": active_historical_events,
+		"historical_events": state.historical_events,
 	}
 
 
 @app.get("/api/circuit/{year}/{event_name}")
 def circuit_data(year: int, event_name: str) -> dict[str, object]:
-	cache_key = f"{year}/{event_name}"
-	if cache_key in _circuit_cache:
-		return _circuit_cache[cache_key]
+	bundled = bundle.load_circuit(year, event_name)
+	if bundled is not None:
+		return bundled.model_dump(mode="json")
 	try:
 		data = load_circuit_data(year, event_name)
 	except (RuntimeError, ValueError) as exc:
 		raise HTTPException(status_code=503, detail=str(exc)) from exc
-	result = data.model_dump(mode="json")
-	_circuit_cache[cache_key] = result
-	return result
+	return data.model_dump(mode="json")
 
 
 @app.get("/api/strategy/recommendation")
-def recommendation(lap: int = Query(ge=1)) -> dict[str, object]:
+def recommendation(request: Request, lap: int = Query(ge=1)) -> dict[str, object]:
 	"""The engine's call for one lap of the loaded race, computed server-side."""
-	ctx = _require_context()
+	ctx = _require_context(visitor(request))
 	if lap > ctx.end_lap:
 		raise HTTPException(status_code=422, detail=f"Lap {lap} is beyond this race's {ctx.end_lap} laps")
 
@@ -181,9 +208,9 @@ def recommendation(lap: int = Query(ge=1)) -> dict[str, object]:
 
 
 @app.get("/api/strategy/what-if")
-def what_if(lap: int = Query(ge=1)) -> dict[str, object]:
+def what_if(request: Request, lap: int = Query(ge=1)) -> dict[str, object]:
 	"""Pit / stay out / extend, each a real optimisation from this lap's state."""
-	ctx = _require_context()
+	ctx = _require_context(visitor(request))
 	if lap > ctx.end_lap:
 		raise HTTPException(status_code=422, detail=f"Lap {lap} is beyond this race's {ctx.end_lap} laps")
 
@@ -200,26 +227,26 @@ def what_if(lap: int = Query(ge=1)) -> dict[str, object]:
 
 
 @app.post("/api/simulation/shock")
-def simulation_shock(request: ShockRequest) -> dict[str, object]:
+def simulation_shock(shock: ShockRequest, request: Request) -> dict[str, object]:
 	"""Inject a shock and re-optimise, reporting the real latency (PRD FR-7)."""
-	global active_session_context
-	engine = _require_simulation()
+	state = visitor(request)
+	engine = _require_simulation(state)
 	started = perf_counter()
 	try:
-		result = engine.inject_shock(request.lap, request.event_type)
+		result = engine.inject_shock(shock.lap, shock.event_type)
 	except ValueError as exc:
 		raise HTTPException(status_code=422, detail=str(exc)) from exc
 	elapsed = perf_counter() - started
 
-	if active_session_context is not None:
-		active_session_context = SessionReplayContext(
-			p1=active_session_context.p1,
-			p2=active_session_context.p2,
-			end_lap=active_session_context.end_lap,
-			uncertainty_events=(request.event_type.value,),
-			field_median_lap_times=active_session_context.field_median_lap_times,
+	if state.context is not None:
+		state.context = SessionReplayContext(
+			p1=state.context.p1,
+			p2=state.context.p2,
+			end_lap=state.context.end_lap,
+			uncertainty_events=(shock.event_type.value,),
+			field_median_lap_times=state.context.field_median_lap_times,
 		)
-	timeline.record("shock_event", request.lap, request.event_type.value)
+	timeline.record(session_id(request), "shock_event", shock.lap, shock.event_type.value)
 
 	return {
 		"accepted": True,
@@ -233,25 +260,25 @@ def simulation_shock(request: ShockRequest) -> dict[str, object]:
 
 
 @app.post("/api/simulation/decision")
-def simulation_decision(request: DecisionRequest) -> dict[str, object]:
-	engine = _require_simulation()
+def simulation_decision(decision: DecisionRequest, request: Request) -> dict[str, object]:
+	engine = _require_simulation(visitor(request))
 	try:
-		result = engine.accept_decision(request.lap, request.action)
+		result = engine.accept_decision(decision.lap, decision.action)
 	except ValueError as exc:
 		raise HTTPException(status_code=422, detail=str(exc)) from exc
-	timeline.record("user_decision", request.lap, request.action)
+	timeline.record(session_id(request), "user_decision", decision.lap, decision.action)
 	return {"accepted": True, "fork_updated": True, "tick": result.model_dump(mode="json")}
 
 
 @app.get("/api/simulation/tick")
-def simulation_tick(lap: int = Query(ge=1)) -> dict[str, object]:
+def simulation_tick(request: Request, lap: int = Query(ge=1)) -> dict[str, object]:
 	"""The simulation's state at one lap.
 
 	Before the fork this is the recorded race; after it, the projected branch.
 	The frontend asks for a lap and renders what comes back, so scrubbing and
 	playback follow the projection rather than showing the fork's state forever.
 	"""
-	engine = _require_simulation()
+	engine = _require_simulation(visitor(request))
 	if lap > engine.end_lap:
 		raise HTTPException(status_code=422, detail=f"Lap {lap} is beyond this race's {engine.end_lap} laps")
 	tick = engine.tick(lap)
@@ -269,8 +296,8 @@ def simulation_tick(lap: int = Query(ge=1)) -> dict[str, object]:
 
 
 @app.get("/api/simulation/counterfactual")
-def counterfactual_summary() -> dict[str, object]:
-	engine = _require_simulation()
+def counterfactual_summary(request: Request) -> dict[str, object]:
+	engine = _require_simulation(visitor(request))
 	try:
 		summary = engine.summary().model_dump(mode="json")
 	except ValueError as exc:
@@ -282,8 +309,8 @@ def counterfactual_summary() -> dict[str, object]:
 
 
 @app.get("/api/simulation/reoptimizations")
-async def reoptimization_log() -> dict[str, object]:
-	engine = _require_simulation()
+def reoptimization_log(request: Request) -> dict[str, object]:
+	engine = _require_simulation(visitor(request))
 	return {
 		"session_id": engine.session_id,
 		"records": [record.model_dump(mode="json") for record in engine.reoptimization_log],
@@ -291,38 +318,39 @@ async def reoptimization_log() -> dict[str, object]:
 
 
 @app.get("/api/simulation/assumptions")
-async def simulation_assumptions() -> dict[str, object]:
+def simulation_assumptions(request: Request) -> dict[str, object]:
 	"""The stated assumptions behind every projected value (PRD FR-25)."""
-	engine = _require_simulation()
+	engine = _require_simulation(visitor(request))
 	return {"assumptions": engine.model_assumptions(), "fork_lap": engine.fork_lap}
 
 
 @app.get("/api/timeline")
-async def get_timeline() -> dict[str, object]:
-	return {"events": timeline.list_events()}
+def get_timeline(request: Request) -> dict[str, object]:
+	return {"events": timeline.list_events(getattr(request.state, "session_id", "anonymous"))}
 
 
 @app.websocket("/ws/replay")
 async def replay_socket(websocket: WebSocket) -> None:
 	await websocket.accept()
 	try:
+		state = store.get(websocket.cookies.get(COOKIE_NAME) or "anonymous")
 		request = await websocket.receive_json()
 		speed = float(request.get("speed", 1.0))
 		start_lap = max(1, int(request.get("start_lap", 1)))
 
-		if active_simulation is not None and request.get("simulation", False):
-			for lap in range(start_lap, active_simulation.end_lap + 1):
-				tick = active_simulation.tick(lap)
+		if state.simulation is not None and request.get("simulation", False):
+			for lap in range(start_lap, state.simulation.end_lap + 1):
+				tick = state.simulation.tick(lap)
 				await websocket.send_json({"type": "tick", **tick.model_dump(mode="json")})
 				await asyncio.sleep(min(0.01, 0.1 / speed))
 			await websocket.send_json(
-				{"type": "complete", "scenario_id": active_simulation.scenario_id}
+				{"type": "complete", "scenario_id": state.simulation.scenario_id}
 			)
 			return
 
-		if active_session_context is not None:
+		if state.context is not None:
 			async for tick in replay_session_ticks(
-				active_session_context, speed=speed, start_lap=start_lap
+				state.context, speed=speed, start_lap=start_lap
 			):
 				await websocket.send_json({"type": "tick", **tick.__dict__})
 			await websocket.send_json({"type": "complete"})
@@ -343,3 +371,20 @@ async def replay_socket(websocket: WebSocket) -> None:
 	except Exception as exc:  # noqa: BLE001 - the client is told, not left hanging
 		await websocket.send_json({"type": "error", "message": str(exc)})
 		await websocket.close(code=1011)
+
+
+# ---------------------------------------------------------------- static site
+#
+# In a deployment the built frontend is served by this same process, so the whole
+# app is one container on one port with no CORS and no second service to keep
+# alive. In development Vite serves the frontend itself and this directory simply
+# does not exist, so the mount is skipped.
+_FRONTEND_DIST = Path(__file__).resolve().parents[1] / "static"
+
+if _FRONTEND_DIST.is_dir():
+
+	@app.get("/", include_in_schema=False)
+	def index() -> FileResponse:
+		return FileResponse(_FRONTEND_DIST / "index.html")
+
+	app.mount("/", StaticFiles(directory=_FRONTEND_DIST, html=True), name="static")
