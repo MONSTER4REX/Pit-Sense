@@ -1,5 +1,8 @@
 # PitSense
 
+[![tests](https://github.com/MONSTER4REX/Pit-Sense/actions/workflows/tests.yml/badge.svg)](https://github.com/MONSTER4REX/Pit-Sense/actions/workflows/tests.yml)
+[![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 **Predictive pit strategy and undercut intelligence.** Two products, one engine:
 *Race Analysis* answers "what should we do right now?", *Simulation Lab* answers
 "what would have happened if we had done X?"
@@ -149,3 +152,7 @@ Not built, and not claimed anywhere in the UI:
   result is in [`docs/feasibility_energy.json`](docs/feasibility_energy.json).
 - **No live telemetry.** Historical replay only.
 - **One tracked car against one modelled rival**, not the full grid.
+
+## Licence
+
+[MIT](LICENSE).
