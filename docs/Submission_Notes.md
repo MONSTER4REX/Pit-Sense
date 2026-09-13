@@ -30,7 +30,7 @@ assumption trail.
 | Explainability breakdown on 100% of recommendations | PASS |
 | Confidence band on 100% of recommendations | PASS |
 | Recommendation recomputes per lap (not frozen) | PASS |
-| Re-optimisation within the 1s budget | PASS — max measured **0.294s** |
+| Re-optimisation within the 1s budget | PASS — max measured **0.095s** |
 | Two-tier availability metadata correct for all 5 races | PASS |
 | Opponent post-fork path driven by a stated baseline model | PASS |
 

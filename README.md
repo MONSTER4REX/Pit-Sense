@@ -134,7 +134,7 @@ Australia, 2024 Britain, 2024 Azerbaijan):
 |---|---|
 | Explainability + confidence band on every recommendation | PASS |
 | Recommendation recomputes per lap, never frozen | PASS |
-| Re-optimisation inside the 1s budget | PASS — max **0.294s** |
+| Re-optimisation inside the 1s budget | PASS — max **0.095s** |
 | Directional pit-window agreement | **3 of 5** (target 3 of 5) |
 | Tyre-cliff onset within ±2 laps | 7 of 19 scorable stints |
 | Source data gaps flagged rather than interpolated | 8 |
