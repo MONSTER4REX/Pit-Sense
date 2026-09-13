@@ -329,11 +329,13 @@ def simulation_shock(shock: ShockRequest, request: Request) -> dict[str, object]
 
 @app.post("/api/simulation/decision")
 def simulation_decision(decision: DecisionRequest, request: Request) -> dict[str, object]:
-	engine = _require_simulation(visitor(request))
+	state = visitor(request)
+	engine = _require_simulation(state)
 	try:
 		result = engine.accept_decision(decision.lap, decision.action)
 	except ValueError as exc:
 		raise HTTPException(status_code=422, detail=str(exc)) from exc
+	state.forget_answers()
 	timeline.record(session_id(request), "user_decision", decision.lap, decision.action)
 	return {"accepted": True, "fork_updated": True, "tick": result.model_dump(mode="json")}
 
@@ -356,18 +358,30 @@ def simulation_tick(
 	engine = _require_simulation(state)
 	if lap > engine.end_lap:
 		raise HTTPException(status_code=422, detail=f"Lap {lap} is beyond this race's {engine.end_lap} laps")
+
+	key = ("tick", lap, engine.scenario_id, engine.fork_lap, len(engine.decision_history))
+	cached = state.cached(key)
+	if cached is not None:
+		return cached
+
 	tick = engine.tick(lap)
 	payload = tick.model_dump(mode="json")
 	payload["fork_lap"] = engine.fork_lap
-	payload["is_review_lap"] = engine.fork_lap is not None and engine.is_review_lap(lap)
-	if engine.fork_lap is not None and lap >= engine.fork_lap:
-		# Branches computed from the projected state, so the numbers on screen
-		# belong to the lap the heading names.
+	is_review = engine.fork_lap is not None and engine.is_review_lap(lap)
+	payload["is_review_lap"] = is_review
+
+	# The branches are three more optimisations on top of the tick itself. They
+	# are only actionable where the strategist can commit a decision - the fork
+	# and each scheduled review - and computing them on every lap of a running
+	# replay is what made a projected tick cost more than the lap it represents.
+	if engine.fork_lap is not None and (is_review or lap == engine.fork_lap):
 		payload["what_if"] = {
 			name: branch.model_dump(mode="json")
 			for name, branch in engine.projected_what_if(lap).items()
 		}
-	return payload
+		payload["what_if_lap"] = lap
+
+	return state.remember(key, payload)
 
 
 @app.get("/api/simulation/counterfactual")

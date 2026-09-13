@@ -57,6 +57,8 @@ export function SimulationLabProvider({ children }) {
 	// True when a scheduled strategy review falls due on the lap being viewed, so
 	// the decision panel can offer the strategist a fresh call (PRD 5.H / 9.1).
 	const [isReviewLap, setReviewLap] = useState(false);
+	// The lap the branches on screen were computed for.
+	const [whatIfLap, setWhatIfLap] = useState(null);
 
 	const requestRef = useRef(0);
 	const totalLaps = session?.total_laps ?? 0;
@@ -73,6 +75,7 @@ export function SimulationLabProvider({ children }) {
 		setAssumptions([]);
 		setCurrentLap(1);
 		setReviewLap(false);
+		setWhatIfLap(null);
 		setError(null);
 	}, []);
 
@@ -155,9 +158,14 @@ export function SimulationLabProvider({ children }) {
 				if (requestId !== requestRef.current) return;
 				recordProjectedTick(tick);
 				setReviewLap(Boolean(tick.is_review_lap));
-				// Branches computed from the projected state for this same lap, so
-				// the panel's heading and its numbers always refer to one lap.
-				if (tick.what_if) setWhatIf(tick.what_if);
+				// Branches arrive only at the laps where a decision can be made, so
+				// the lap they were computed for travels with them. The panel is
+				// headed with that lap, never with whichever lap is being viewed -
+				// otherwise one lap's numbers sit under another lap's heading.
+				if (tick.what_if) {
+					setWhatIf(tick.what_if);
+					setWhatIfLap(tick.what_if_lap ?? null);
+				}
 			})
 			.catch((cause) => {
 				if (cause.name !== "AbortError") setError(cause.message);
@@ -301,6 +309,7 @@ export function SimulationLabProvider({ children }) {
 			shock,
 			reoptimizationStatus,
 			isReviewLap,
+			whatIfLap,
 			recommendation: activeRecommendation,
 			whatIf,
 			projectedTicks,
@@ -331,6 +340,7 @@ export function SimulationLabProvider({ children }) {
 			shock,
 			reoptimizationStatus,
 			isReviewLap,
+			whatIfLap,
 			activeRecommendation,
 			whatIf,
 			projectedTicks,

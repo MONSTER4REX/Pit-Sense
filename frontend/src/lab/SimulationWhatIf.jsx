@@ -15,7 +15,7 @@ const BRANCH_ORDER = ["pit_now", "stay_out", "extend_stint"];
 const BRANCH_LABEL = { pit_now: "PIT", stay_out: "STAY OUT", extend_stint: "EXTEND" };
 
 export default function SimulationWhatIf() {
-	const { whatIf, phase, currentLap } = useSimulationLab();
+	const { whatIf, phase, currentLap, whatIfLap } = useSimulationLab();
 	const projected = phase === PHASES.PROJECTED;
 
 	if (!whatIf) {
@@ -32,12 +32,15 @@ export default function SimulationWhatIf() {
 	return (
 		<Panel
 			label="WHAT-IF — PROJECTED"
-			title={`Branches from lap ${currentLap}`}
+			title={`Branches from lap ${whatIfLap ?? currentLap}`}
 			tone={projected ? "projected" : "historical"}
 			className="lab-whatif"
 		>
 			<Note tone="warning">
 				Every figure below is a projection from the engine's model, not a recorded race outcome.
+				{whatIfLap != null && whatIfLap !== currentLap
+					? ` These branches were computed at lap ${whatIfLap}, the last point a decision could be committed; the next set arrives at the next review.`
+					: ""}
 			</Note>
 
 			<div className="lab-branch-row">
