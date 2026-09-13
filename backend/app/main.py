@@ -116,6 +116,7 @@ def _load_race_into(
 	if session_key is not None:
 		timeline.clear(session_key)
 	state.forget_answers()
+	state.race = (year, event_name)
 	state.simulation = SimulationEngine(
 		session.p1, session.p2, field_median_lap_times=session.field_median_lap_times
 	)
@@ -230,6 +231,15 @@ def recommendation(
 	if cached is not None:
 		return cached
 
+	# With no shock the answer is fixed by the recorded race, so the bundle
+	# already holds it. Re-deriving it costs seconds early in a race, which is
+	# what a small instance cannot absorb while a replay is running.
+	if not ctx.uncertainty_events and state.race:
+		answer = bundle.load_answer(state.race[0], state.race[1], lap)
+		if answer:
+			payload = {**answer["recommendation"], "lap": lap, "precomputed": True}
+			return state.remember(key, payload)
+
 	started = perf_counter()
 	result = optimize_strategy(
 		start_lap=lap,
@@ -260,6 +270,13 @@ def what_if(
 	cached = state.cached(key)
 	if cached is not None:
 		return cached
+
+	if not ctx.uncertainty_events and state.race:
+		answer = bundle.load_answer(state.race[0], state.race[1], lap)
+		if answer:
+			return state.remember(
+				key, {"lap": lap, "branches": answer["what_if"], "precomputed": True}
+			)
 
 	branches = compare_branches(
 		current_lap=lap,

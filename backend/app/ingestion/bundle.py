@@ -101,3 +101,16 @@ def availability() -> list[dict[str, object]]:
 		}
 		for entry in bundle_index()
 	]
+
+
+def load_answer(year: int, event: str, lap: int) -> Optional[dict[str, Any]]:
+	"""The engine's own output for one lap of a race, computed ahead of time.
+
+	Only valid with no shock injected: a shock changes the inputs, and those runs
+	are computed live. See scripts.export_race_bundle for how these were produced -
+	by the same engine, through the same code path, just not while someone waits.
+	"""
+	payload = _load(_race_key(year, event))
+	if payload is None:
+		return None
+	return (payload.get("answers") or {}).get(str(lap))

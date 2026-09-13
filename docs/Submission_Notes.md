@@ -148,6 +148,25 @@ energy-store, or ERS channel. Per PRD §5.K, **no energy UI was built.**
   oldest age observed before the fork, which let a fifty-lap-old set cost exactly
   what a sixteen-lap-old one did and made never stopping free.
 
+## Why the deployed instance serves precomputed answers
+
+Race Analysis is deterministic. With no shock injected, a lap's recommendation
+and its three what-if branches are a pure function of the recorded race, so they
+are computed once by `scripts.export_race_bundle` - through the same engine, the
+same code path - and shipped in the bundle.
+
+This is a performance measure, not a shortcut. A what-if early in a race spans
+the whole remaining race and cost about 3.7 seconds on the deployed instance,
+while a replay asks for a recommendation and a what-if every lap. The instance
+could not keep up, requests queued, the health check timed out, and the host
+restarted the container - which then dropped every visitor's loaded race. Served
+from the bundle the same request takes 21ms, and the values are byte-identical to
+computing them live, which is asserted rather than assumed.
+
+Anything a shock touches is still computed live, because a shock changes the
+inputs: the whole Simulation Lab counterfactual path runs in real time, and its
+re-optimisation latency is what PRD FR-7 measures.
+
 ## Known limitations, stated plainly
 
 1. **Projected margins compound a per-lap pace difference.** Two cars' measured

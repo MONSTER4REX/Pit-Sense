@@ -26,6 +26,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from app.engine.reoptimizer import optimize_strategy  # noqa: E402
+from app.replay.session_context import SessionReplayContext, lap_context  # noqa: E402
+from app.whatif.simulator import compare_branches  # noqa: E402
 from app.ingestion.fastf1_client import (  # noqa: E402
 	DEFAULT_CACHE_DIR,
 	SUPPORTED_RACES,
@@ -39,6 +42,40 @@ BUNDLE_DIR = Path(__file__).resolve().parents[1] / "app" / "data" / "races"
 
 def _race_key(year: int, event: str) -> str:
 	return f"{year}_{event.lower().replace(' ', '_')}"
+
+def _precompute_answers(session) -> dict[str, dict]:
+	"""Every lap's recommendation and what-if, from the real engine."""
+	end_lap = max(session.p1.total_laps or 0, session.p2.total_laps or 0, len(session.p2.laps))
+	ctx = SessionReplayContext(
+		p1=session.p1,
+		p2=session.p2,
+		end_lap=end_lap,
+		field_median_lap_times=session.field_median_lap_times,
+	)
+
+	answers: dict[str, dict] = {}
+	for lap in range(1, end_lap + 1):
+		context = lap_context(ctx, lap)
+		inputs = {
+			"current_compound": str(context["compound"]),
+			"current_tyre_age": int(context["tyre_age"]),
+			"lap_time_seconds": list(context["lap_times"]) or [90.0, 90.0],
+			"rival_pit_laps": tuple(context["rival_pit_laps"]),
+			"rival_tyre_age": int(context["rival_tyre_age"]),
+			"cars_ahead_gaps_seconds": list(context["gaps_to_ahead"]) or None,
+			"stint_lap_numbers": tuple(context["stint_lap_numbers"]),
+			"stint_compounds": tuple(context["stint_compounds"]),
+			"stint_tyre_ages": tuple(context["stint_tyre_ages"]),
+			"stint_lap_times": tuple(context["stint_lap_times"]),
+			"field_baseline": context["field_baseline"],
+		}
+		recommendation = optimize_strategy(start_lap=lap, end_lap=max(lap + 1, end_lap), **inputs)
+		branches = compare_branches(current_lap=lap, end_lap=max(lap + 1, end_lap), **inputs)
+		answers[str(lap)] = {
+			"recommendation": recommendation.model_dump(mode="json"),
+			"what_if": {name: branch.model_dump(mode="json") for name, branch in branches.items()},
+		}
+	return answers
 
 
 def main() -> int:
@@ -73,6 +110,14 @@ def main() -> int:
 
 		if verified:
 			payload["circuit"] = load_circuit_data(year, event).model_dump(mode="json")
+
+		# Race Analysis is deterministic: with no shock injected, a lap's
+		# recommendation and its three what-if branches are a pure function of the
+		# recorded race. Computing them here, through the same engine the live path
+		# uses, means a deployed instance serves the identical values without
+		# re-deriving them - which is what was saturating a small instance, since a
+		# what-if early in a race spans the whole remaining race and costs seconds.
+		payload["answers"] = _precompute_answers(session)
 
 		path = BUNDLE_DIR / f"{key}.json"
 		path.write_text(json.dumps(payload, separators=(",", ":")), encoding="utf-8")

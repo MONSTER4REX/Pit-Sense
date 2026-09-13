@@ -44,6 +44,8 @@ class VisitorState:
 
 	simulation: SimulationEngine | None = None
 	context: SessionReplayContext | None = None
+	# Which race is loaded, so precomputed answers for it can be found.
+	race: tuple[int, str] | None = None
 	historical_events: list[dict[str, str]] = field(default_factory=list)
 	circuit_cache: dict[str, dict[str, object]] = field(default_factory=dict)
 	_answers: OrderedDict[tuple, dict] = field(default_factory=OrderedDict)
