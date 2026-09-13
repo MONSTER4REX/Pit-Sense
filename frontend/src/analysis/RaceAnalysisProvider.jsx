@@ -52,7 +52,15 @@ export function RaceAnalysisProvider({ children }) {
 	/* Load the race list once, then open on the first available race. */
 	useEffect(() => {
 		const controller = new AbortController();
-		fetchAvailableRaces(controller.signal)
+		/*
+		 * Keep the first API requests sequential. Both responses can establish
+		 * the visitor cookie; racing them lets the later response replace the
+		 * cookie after the race-load request has already started, leaving the
+		 * comparison endpoint with an empty visitor slot.
+		 */
+		fetchTyreModelStatus(controller.signal)
+			.then(setTyreModel, () => setTyreModel(null))
+			.then(() => fetchAvailableRaces(controller.signal))
 			.then((available) => {
 				setRaces(available);
 				if (available.length) selectRace(available[0]);
@@ -60,9 +68,6 @@ export function RaceAnalysisProvider({ children }) {
 			.catch((cause) => {
 				if (cause.name !== "AbortError") setError(cause.message);
 			});
-		fetchTyreModelStatus(controller.signal)
-			.then(setTyreModel)
-			.catch(() => setTyreModel(null));
 		return () => controller.abort();
 	}, [selectRace]);
 

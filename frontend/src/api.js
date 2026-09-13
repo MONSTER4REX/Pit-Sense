@@ -10,7 +10,19 @@
 async function parseOrThrow(response) {
 	if (!response.ok) {
 		const body = await response.text().catch(() => "");
-		throw new Error(`${response.status} ${response.statusText}: ${body}`);
+		let message = "";
+		try {
+			const payload = JSON.parse(body);
+			message = typeof payload.detail === "string" ? payload.detail : "";
+		} catch {
+			// Gateway errors are often HTML, so keep that implementation detail
+			// out of the product UI.
+		}
+		if (!message && response.status === 502) {
+			message = "The strategy service is temporarily unavailable. Please retry.";
+		}
+		if (!message) message = response.statusText || "Request failed";
+		throw new Error(message);
 	}
 	return response.json();
 }
