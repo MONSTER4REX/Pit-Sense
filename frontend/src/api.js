@@ -28,7 +28,7 @@ async function parseOrThrow(response) {
 }
 
 function getJson(path, signal) {
-	return fetch(path, { signal }).then(parseOrThrow);
+	return fetch(path, { signal, credentials: "include" }).then(parseOrThrow);
 }
 
 function postJson(path, body, signal) {
@@ -37,6 +37,7 @@ function postJson(path, body, signal) {
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify(body),
 		signal,
+		credentials: "include",
 	}).then(parseOrThrow);
 }
 
@@ -51,7 +52,31 @@ export const fetchCircuitData = (year, eventName, signal) =>
 export const fetchRecommendation = (lap, signal) =>
 	getJson(`/api/strategy/recommendation?lap=${lap}`, signal);
 
-export const fetchWhatIf = (lap, signal) => getJson(`/api/strategy/what-if?lap=${lap}`, signal);
+const waitBeforeRetry = (delayMs, signal) =>
+	new Promise((resolve, reject) => {
+		const timer = setTimeout(resolve, delayMs);
+		signal?.addEventListener(
+			"abort",
+			() => {
+				clearTimeout(timer);
+				reject(new DOMException("The request was aborted", "AbortError"));
+			},
+			{ once: true },
+		);
+	});
+
+export const fetchWhatIf = (lap, signal) => {
+	const path = `/api/strategy/what-if?lap=${lap}`;
+	return getJson(path, signal).catch((cause) => {
+		if (cause.message !== "Load a historical race session first") throw cause;
+		return waitBeforeRetry(250, signal)
+			.then(() => getJson(path, signal))
+			.catch((retryCause) => {
+				if (retryCause.message !== "Load a historical race session first") throw retryCause;
+				return waitBeforeRetry(750, signal).then(() => getJson(path, signal));
+			});
+	});
+};
 
 export const fetchTimeline = (signal) => getJson("/api/timeline", signal);
 
