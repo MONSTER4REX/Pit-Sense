@@ -26,7 +26,9 @@ async function parseOrThrow(response) {
 			message = "The strategy service is temporarily unavailable. Please retry.";
 		}
 		if (!message) message = response.statusText || "Request failed";
-		throw new Error(message);
+		const error = new Error(message);
+		error.status = response.status;
+		throw error;
 	}
 	return response.json();
 }
@@ -78,15 +80,18 @@ const waitBeforeRetry = (delayMs, signal) =>
 
 export const fetchWhatIf = (lap, signal) => {
 	const path = `/api/strategy/what-if?lap=${lap}`;
-	return getJson(path, signal).catch((cause) => {
-		if (cause.message !== "Load a historical race session first") throw cause;
-		return waitBeforeRetry(250, signal)
-			.then(() => getJson(path, signal))
-			.catch((retryCause) => {
-				if (retryCause.message !== "Load a historical race session first") throw retryCause;
-				return waitBeforeRetry(750, signal).then(() => getJson(path, signal));
-			});
-	});
+	const retryable = (cause) =>
+		cause.message === "Load a historical race session first" ||
+		[502, 503, 504].includes(cause.status);
+	return getJson(path, signal)
+		.catch((cause) => {
+			if (!retryable(cause)) throw cause;
+			return waitBeforeRetry(500, signal).then(() => getJson(path, signal));
+		})
+		.catch((cause) => {
+			if (!retryable(cause)) throw cause;
+			return waitBeforeRetry(1500, signal).then(() => getJson(path, signal));
+		});
 };
 
 export const fetchTimeline = (signal) => getJson("/api/timeline", signal);

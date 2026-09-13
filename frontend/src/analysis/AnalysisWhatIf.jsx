@@ -36,6 +36,7 @@ export default function AnalysisWhatIf() {
 		fetchWhatIf(Math.min(currentLap, totalLaps), controller.signal)
 			.then((data) => {
 				setBranches(data.branches);
+				setError(null);
 				setLoading(false);
 			})
 			.catch((cause) => {
