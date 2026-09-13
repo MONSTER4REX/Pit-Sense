@@ -7,7 +7,11 @@
  * therefore cannot get wrong - any authoritative race state.
  */
 
+let sessionToken = null;
+
 async function parseOrThrow(response) {
+	const responseToken = response.headers.get("X-PitSense-Session");
+	if (responseToken) sessionToken = responseToken;
 	if (!response.ok) {
 		const body = await response.text().catch(() => "");
 		let message = "";
@@ -28,13 +32,20 @@ async function parseOrThrow(response) {
 }
 
 function getJson(path, signal) {
-	return fetch(path, { signal, credentials: "include" }).then(parseOrThrow);
+	return fetch(path, {
+		signal,
+		credentials: "include",
+		headers: sessionToken ? { "X-PitSense-Session": sessionToken } : undefined,
+	}).then(parseOrThrow);
 }
 
 function postJson(path, body, signal) {
 	return fetch(path, {
 		method: "POST",
-		headers: { "Content-Type": "application/json" },
+		headers: {
+			"Content-Type": "application/json",
+			...(sessionToken ? { "X-PitSense-Session": sessionToken } : {}),
+		},
 		body: JSON.stringify(body),
 		signal,
 		credentials: "include",

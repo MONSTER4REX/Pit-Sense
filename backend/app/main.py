@@ -38,15 +38,17 @@ from app.whatif.simulator import compare_branches
 app = FastAPI(title="PitSense Historical Strategy Console", version="2.0.0")
 
 timeline = TimelineLogger()
+SESSION_HEADER = "X-PitSense-Session"
 
 
 @app.middleware("http")
 async def attach_session_cookie(request: Request, call_next):
 	"""Give every visitor their own slot, so two people on one URL do not share
 	a loaded race (see app.session_store)."""
-	session_id = request.cookies.get(COOKIE_NAME) or new_session_id()
+	session_id = request.headers.get(SESSION_HEADER) or request.cookies.get(COOKIE_NAME) or new_session_id()
 	request.state.session_id = session_id
 	response = await call_next(request)
+	response.headers[SESSION_HEADER] = session_id
 	response.set_cookie(
 		COOKIE_NAME,
 		session_id,
