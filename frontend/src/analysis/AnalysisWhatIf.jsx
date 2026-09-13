@@ -23,7 +23,7 @@ const TYRE_METER_CEILING_SECONDS = 60;
 const TRAFFIC_METER_CEILING_SECONDS = 10;
 
 export default function AnalysisWhatIf() {
-	const { currentLap, totalLaps, session } = useRaceAnalysis();
+	const { currentLap, totalLaps, session, selectedRace } = useRaceAnalysis();
 	const [branches, setBranches] = useState(null);
 	const [error, setError] = useState(null);
 	const [loading, setLoading] = useState(false);
@@ -33,7 +33,7 @@ export default function AnalysisWhatIf() {
 		const controller = new AbortController();
 		setLoading(true);
 		setError(null);
-		fetchWhatIf(Math.min(currentLap, totalLaps), controller.signal)
+		fetchWhatIf(Math.min(currentLap, totalLaps), controller.signal, selectedRace)
 			.then((data) => {
 				setBranches(data.branches);
 				setError(null);
@@ -45,7 +45,7 @@ export default function AnalysisWhatIf() {
 				setLoading(false);
 			});
 		return () => controller.abort();
-	}, [session, currentLap, totalLaps]);
+	}, [session, currentLap, totalLaps, selectedRace]);
 
 	const entries = branches
 		? BRANCH_ORDER.filter((key) => branches[key]).map((key) => [key, branches[key]])

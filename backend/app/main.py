@@ -83,10 +83,50 @@ def _require_simulation(state: VisitorState) -> SimulationEngine:
 	return state.simulation
 
 
-def _require_context(state: VisitorState) -> SessionReplayContext:
+def _require_context(
+	state: VisitorState,
+	year: int | None = None,
+	event: str | None = None,
+) -> SessionReplayContext:
+	"""The visitor's loaded race, reloading it if their slot is empty.
+
+	Slots live in this process's memory, so a restart - which a small instance
+	does routinely - used to leave everyone mid-session getting 409s until they
+	refreshed. Since a race loads from the bundle in well under a second, a client
+	that tells us which race it is on can simply be put back where it was.
+	"""
+	if state.context is None and year is not None and event:
+		_load_race_into(state, year, event, session_key=None)
 	if state.context is None:
 		raise HTTPException(status_code=409, detail="Load a historical race session first")
 	return state.context
+
+
+def _load_race_into(
+	state: VisitorState, year: int, event_name: str, session_key: str | None
+) -> object:
+	"""Put a race into a visitor's slot, from the bundle where possible."""
+	session = bundle.load_session(year, event_name)
+	if session is None:
+		try:
+			session = load_historical_session(year, event_name)
+		except (RuntimeError, ValueError) as exc:
+			raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+	if session_key is not None:
+		timeline.clear(session_key)
+	state.forget_answers()
+	state.simulation = SimulationEngine(
+		session.p1, session.p2, field_median_lap_times=session.field_median_lap_times
+	)
+	state.historical_events = session.historical_events
+	state.context = SessionReplayContext(
+		p1=session.p1,
+		p2=session.p2,
+		end_lap=state.simulation.end_lap,
+		field_median_lap_times=session.field_median_lap_times,
+	)
+	return session
 
 
 def _engine_inputs(ctx: SessionReplayContext, lap: int) -> dict:
@@ -134,25 +174,7 @@ def available_races() -> list[dict[str, object]]:
 @app.get("/api/race/{year}/{event_name}/session")
 def race_session(year: int, event_name: str, request: Request) -> dict[str, object]:
 	state = visitor(request)
-	session = bundle.load_session(year, event_name)
-	if session is None:
-		try:
-			session = load_historical_session(year, event_name)
-		except (RuntimeError, ValueError) as exc:
-			raise HTTPException(status_code=503, detail=str(exc)) from exc
-
-	timeline.clear(getattr(request.state, "session_id", "anonymous"))
-	state.simulation = SimulationEngine(
-		session.p1, session.p2, field_median_lap_times=session.field_median_lap_times
-	)
-	state.historical_events = session.historical_events
-	state.forget_answers()
-	state.context = SessionReplayContext(
-		p1=session.p1,
-		p2=session.p2,
-		end_lap=state.simulation.end_lap,
-		field_median_lap_times=session.field_median_lap_times,
-	)
+	session = _load_race_into(state, year, event_name, session_key=session_id(request))
 
 	return {
 		"year": year,
@@ -191,13 +213,18 @@ def circuit_data(year: int, event_name: str) -> dict[str, object]:
 
 
 @app.get("/api/strategy/recommendation")
-def recommendation(request: Request, lap: int = Query(ge=1)) -> dict[str, object]:
+def recommendation(
+	request: Request,
+	lap: int = Query(ge=1),
+	year: int | None = Query(default=None),
+	event: str | None = Query(default=None),
+) -> dict[str, object]:
 	"""The engine's call for one lap of the loaded race, computed server-side."""
-	ctx = _require_context(visitor(request))
+	state = visitor(request)
+	ctx = _require_context(state, year, event)
 	if lap > ctx.end_lap:
 		raise HTTPException(status_code=422, detail=f"Lap {lap} is beyond this race's {ctx.end_lap} laps")
 
-	state = visitor(request)
 	key = ("recommendation", lap, ctx.uncertainty_events)
 	cached = state.cached(key)
 	if cached is not None:
@@ -217,13 +244,18 @@ def recommendation(request: Request, lap: int = Query(ge=1)) -> dict[str, object
 
 
 @app.get("/api/strategy/what-if")
-def what_if(request: Request, lap: int = Query(ge=1)) -> dict[str, object]:
+def what_if(
+	request: Request,
+	lap: int = Query(ge=1),
+	year: int | None = Query(default=None),
+	event: str | None = Query(default=None),
+) -> dict[str, object]:
 	"""Pit / stay out / extend, each a real optimisation from this lap's state."""
-	ctx = _require_context(visitor(request))
+	state = visitor(request)
+	ctx = _require_context(state, year, event)
 	if lap > ctx.end_lap:
 		raise HTTPException(status_code=422, detail=f"Lap {lap} is beyond this race's {ctx.end_lap} laps")
 
-	state = visitor(request)
 	key = ("what-if", lap, ctx.uncertainty_events)
 	cached = state.cached(key)
 	if cached is not None:
@@ -290,14 +322,21 @@ def simulation_decision(decision: DecisionRequest, request: Request) -> dict[str
 
 
 @app.get("/api/simulation/tick")
-def simulation_tick(request: Request, lap: int = Query(ge=1)) -> dict[str, object]:
+def simulation_tick(
+	request: Request,
+	lap: int = Query(ge=1),
+	year: int | None = Query(default=None),
+	event: str | None = Query(default=None),
+) -> dict[str, object]:
 	"""The simulation's state at one lap.
 
 	Before the fork this is the recorded race; after it, the projected branch.
 	The frontend asks for a lap and renders what comes back, so scrubbing and
 	playback follow the projection rather than showing the fork's state forever.
 	"""
-	engine = _require_simulation(visitor(request))
+	state = visitor(request)
+	_require_context(state, year, event)
+	engine = _require_simulation(state)
 	if lap > engine.end_lap:
 		raise HTTPException(status_code=422, detail=f"Lap {lap} is beyond this race's {engine.end_lap} laps")
 	tick = engine.tick(lap)

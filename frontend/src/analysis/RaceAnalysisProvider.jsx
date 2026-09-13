@@ -98,7 +98,7 @@ export function RaceAnalysisProvider({ children }) {
 		const requestId = ++requestRef.current;
 		setRecommendationPending(true);
 
-		fetchRecommendation(Math.min(currentLap, totalLaps), controller.signal)
+		fetchRecommendation(Math.min(currentLap, totalLaps), controller.signal, selectedRace)
 			.then((fresh) => {
 				if (requestId !== requestRef.current) return;
 				setRecommendation(fresh);
@@ -112,7 +112,7 @@ export function RaceAnalysisProvider({ children }) {
 				setStatus("error");
 			});
 		return () => controller.abort();
-	}, [session, currentLap, totalLaps]);
+	}, [session, currentLap, totalLaps, selectedRace]);
 
 	useEffect(() => {
 		if (!session) return undefined;

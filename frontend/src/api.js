@@ -100,8 +100,19 @@ export const loadRaceSession = (year, eventName, signal) =>
 export const fetchCircuitData = (year, eventName, signal) =>
 	getJson(`/api/circuit/${year}/${encodeURIComponent(eventName)}`, signal);
 
-export const fetchRecommendation = (lap, signal) =>
-	getJson(`/api/strategy/recommendation?lap=${lap}`, signal);
+/*
+ * Strategy calls carry the race they are about, not just the lap.
+ *
+ * The server keeps each visitor's loaded race in memory, and a small instance
+ * restarts routinely - which used to leave everyone mid-session receiving 409s
+ * until they refreshed the page. Sending the race identity lets the server put
+ * the visitor back where they were instead of refusing the request.
+ */
+const raceQuery = (race) =>
+	race ? `&year=${race.year}&event=${encodeURIComponent(race.event)}` : "";
+
+export const fetchRecommendation = (lap, signal, race) =>
+	getJson(`/api/strategy/recommendation?lap=${lap}${raceQuery(race)}`, signal);
 
 const waitBeforeRetry = (delayMs, signal) =>
 	new Promise((resolve, reject) => {
@@ -116,8 +127,8 @@ const waitBeforeRetry = (delayMs, signal) =>
 		);
 	});
 
-export const fetchWhatIf = (lap, signal) => {
-	const path = `/api/strategy/what-if?lap=${lap}`;
+export const fetchWhatIf = (lap, signal, race) => {
+	const path = `/api/strategy/what-if?lap=${lap}${raceQuery(race)}`;
 	const retryable = (cause) =>
 		cause.message === "Load a historical race session first" ||
 		[502, 503, 504].includes(cause.status);
@@ -142,8 +153,8 @@ export const injectSimulationShock = (eventType, lap, signal) =>
 export const acceptSimulationDecision = (action, lap, signal) =>
 	postJson("/api/simulation/decision", { action, lap }, signal);
 
-export const fetchSimulationTick = (lap, signal) =>
-	getJson(`/api/simulation/tick?lap=${lap}`, signal);
+export const fetchSimulationTick = (lap, signal, race) =>
+	getJson(`/api/simulation/tick?lap=${lap}${raceQuery(race)}`, signal);
 
 export const fetchCounterfactualSummary = (signal) =>
 	getJson("/api/simulation/counterfactual", signal);

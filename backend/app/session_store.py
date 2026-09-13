@@ -28,7 +28,7 @@ from app.simulation.engine import SimulationEngine
 COOKIE_NAME = "pitsense_session"
 # Concurrent visitors kept in memory at once. Each slot holds one loaded race,
 # which is a few hundred kilobytes of lap states plus its projection cache.
-MAX_SESSIONS = 64
+MAX_SESSIONS = 24
 
 
 # Computed answers held per visitor. A recommendation is a pure function of the

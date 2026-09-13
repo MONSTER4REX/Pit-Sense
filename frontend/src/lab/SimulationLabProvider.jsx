@@ -150,7 +150,7 @@ export function SimulationLabProvider({ children }) {
 		const controller = new AbortController();
 		const requestId = ++requestRef.current;
 
-		fetchSimulationTick(Math.min(currentLap, totalLaps), controller.signal)
+		fetchSimulationTick(Math.min(currentLap, totalLaps), controller.signal, selectedRace)
 			.then((tick) => {
 				if (requestId !== requestRef.current) return;
 				recordProjectedTick(tick);
@@ -163,7 +163,7 @@ export function SimulationLabProvider({ children }) {
 				if (cause.name !== "AbortError") setError(cause.message);
 			});
 		return () => controller.abort();
-	}, [session, currentLap, totalLaps, phase]);
+	}, [session, currentLap, totalLaps, phase, selectedRace]);
 
 	/* Historical phase only: the engine's live call for the lap being viewed.
 	 * After the fork the projected ticks carry their own recommendation, and a
@@ -175,8 +175,8 @@ export function SimulationLabProvider({ children }) {
 		const lap = Math.min(currentLap, totalLaps);
 
 		Promise.all([
-			fetchRecommendation(lap, controller.signal),
-			fetchWhatIf(lap, controller.signal),
+			fetchRecommendation(lap, controller.signal, selectedRace),
+			fetchWhatIf(lap, controller.signal, selectedRace),
 		])
 			.then(([fresh, branches]) => {
 				if (requestId !== requestRef.current) return;
@@ -187,7 +187,7 @@ export function SimulationLabProvider({ children }) {
 				if (cause.name !== "AbortError") setError(cause.message);
 			});
 		return () => controller.abort();
-	}, [session, currentLap, totalLaps, phase]);
+	}, [session, currentLap, totalLaps, phase, selectedRace]);
 
 	const refreshTimeline = useCallback(() => {
 		fetchTimeline()
