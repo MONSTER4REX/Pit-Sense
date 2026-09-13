@@ -49,6 +49,13 @@ NEUTRALISED_PIT_LANE_LOSS_SECONDS = 12.0
 RAIN_DEGRADATION_MULTIPLIER = 1.6
 # A fresh set starts at age 1 on the lap after the stop.
 FRESH_TYRE_AGE = 1
+# A stint shorter than this was not a strategy call - it is a car stopping for
+# rain, damage, or a red flag - and it does not describe how the car races.
+MIN_CREDIBLE_STINT_LAPS = 8
+# Outer limit on how long any set can be run. Past this a tyre is not "a little
+# slower", it is finished, and no car completes a race distance on one set. A car
+# reaching it must stop, whatever the compound rules say about the conditions.
+MAX_TYRE_LIFE_LAPS = 40
 # Absolute ceiling on the per-lap time a worn tyre can cost, matching the strategy
 # graph's. It bounds a steep fitted rate without ever letting an older tyre cost
 # less than a younger one.
@@ -179,14 +186,24 @@ def measure_pit_lane_loss(
 
 
 def _typical_stint_laps(race: RaceState) -> int | None:
-	"""Median stint length this car actually ran, in laps."""
+	"""How long a stint this car actually runs, in laps.
+
+	Very short stints are not strategy - they are a car stopping for rain, damage,
+	or under a red flag. Including them drags the median down hard: Verstappen's
+	2023 Dutch race contains one- and two-lap stints, and taking the plain median
+	of every stint returns five, which as a pit-window rule makes a car stop eleven
+	times in a race. Only stints long enough to have been a deliberate stop count,
+	and the answer is held inside a plausible range.
+	"""
 	stops = sorted(stop.lap_number for stop in race.pit_stops)
 	if not stops:
 		return None
-	boundaries = [0, *stops]
+	boundaries = [0, *stops, race.total_laps or stops[-1]]
 	lengths = [later - earlier for earlier, later in zip(boundaries, boundaries[1:])]
-	lengths = [length for length in lengths if length > 0]
-	return int(median(lengths)) if lengths else None
+	deliberate = [length for length in lengths if length >= MIN_CREDIBLE_STINT_LAPS]
+	if not deliberate:
+		return None
+	return int(min(max(median(deliberate), MIN_CREDIBLE_STINT_LAPS), MAX_TYRE_LIFE_LAPS))
 
 
 def bound_relative_pace(

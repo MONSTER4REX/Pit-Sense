@@ -34,6 +34,13 @@ NOMINAL_STINT_LAPS = 20
 # taking as a cheap stop.
 NEUTRALISED_STOP_STINT_FRACTION = 0.5
 DRY_COMPOUNDS = {"SOFT", "MEDIUM", "HARD"}
+# The opponent races under the same physical limits as our car: a set has to run
+# a minimum stint before another stop is worth taking, and a race affords only so
+# many. Without these the baseline pitted whenever its tyre passed a threshold,
+# which on a race whose recorded stint lengths are short meant eleven stops - a
+# comparator that beats itself, and hands our car a win it did not earn.
+MIN_STINT_LAPS = 8
+MAX_STOPS = 3
 
 
 @dataclass(frozen=True)
@@ -43,6 +50,9 @@ class BaselineContext:
 	typical_stint_laps: int | None
 	pit_lane_loss_seconds: float
 	pit_loss_measured: bool
+	# Hard limit on any set's life, past which a stop is forced regardless of
+	# compound rules or conditions.
+	max_tyre_life_laps: int = 40
 
 	@property
 	def stint_target(self) -> int:
@@ -77,11 +87,50 @@ def baseline_decision(
 	end_lap: int,
 	shock_event: str | None,
 	context: BaselineContext,
+	stops_made: int = 0,
 ) -> StrategyDecision:
 	"""Decide what the opponent does at this lap, and say why in plain language."""
 	stint_target = context.stint_target
 	neutralised = shock_event in {"safety_car", "vsc"}
 	on_dry = (car.compound or "").upper() in DRY_COMPOUNDS
+
+	# A worn-out set has to be changed whatever else is true.
+	if car.tyre_age >= context.max_tyre_life_laps:
+		return StrategyDecision(
+			car=car.car,
+			lap=car.lap,
+			action="PIT",
+			target_lap=car.lap,
+			confidence=None,
+			projected_time_cost=context.pit_lane_loss_seconds,
+			projected_position=car.position,
+			explanation=(
+				f"{MODEL_NAME}: the tyre has reached {car.tyre_age} laps, the end of any "
+				"set's usable life, so a stop is forced regardless of strategy."
+			),
+			model_type="BASELINE",
+		)
+
+	# Below the minimum stint, or out of stops, the opponent stays out whatever
+	# the pit-window rule says - the same limits our car races under.
+	if car.tyre_age < MIN_STINT_LAPS or stops_made >= MAX_STOPS:
+		reason = (
+			f"{MODEL_NAME}: at {car.tyre_age} laps the set has not run a minimum stint, "
+			"so stopping again would cost more than it saves."
+			if car.tyre_age < MIN_STINT_LAPS
+			else f"{MODEL_NAME}: {stops_made} stops already made, which is the most a race affords."
+		)
+		return StrategyDecision(
+			car=car.car,
+			lap=car.lap,
+			action="STAY_OUT",
+			target_lap=min(end_lap, car.lap + max(1, MIN_STINT_LAPS - car.tyre_age)),
+			confidence=None,
+			projected_time_cost=0.0,
+			projected_position=car.position,
+			explanation=reason,
+			model_type="BASELINE",
+		)
 
 	if shock_event == "rain" and on_dry:
 		action, reason = "PIT", (

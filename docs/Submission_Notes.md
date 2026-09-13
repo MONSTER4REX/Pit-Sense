@@ -131,6 +131,18 @@ energy-store, or ERS channel. Per PRD §5.K, **no energy UI was built.**
   rather than papered over. The rule is correctly *not* applied to a wet race -
   which is why 2024 Canada and 2023 Netherlands, both run on intermediates, can
   legitimately show no stop call.
+- **A set has a usable life.** Past 40 laps a stop is forced for either car,
+  whatever the compound rules say about the conditions. No car completes a race
+  distance on one set, and without this a wet race - where the two-compound rule
+  does not apply - allowed exactly that.
+- **The opponent races under the same limits as our car:** a minimum stint before
+  another stop is worth taking, and at most three stops. Without them its
+  pit-window rule produced eleven stops at 2023 Netherlands, because that race's
+  recorded stint lengths include one- and two-lap rain and red-flag stops. A
+  comparator that beats itself hands our car a win it did not earn.
+- **A stop the strategist asks for explicitly is theirs to call.** The minimum
+  stint constrains what the engine proposes, not what a human commits to; only
+  the tyre allocation limits both.
 - **Tyre wear always costs more as a set ages.** The per-lap charge rises with
   tyre age under an absolute ceiling. An earlier version held the charge at the
   oldest age observed before the fork, which let a fifty-lap-old set cost exactly

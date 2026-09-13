@@ -33,8 +33,11 @@ from app.schemas.simulation import (
 	SimulationTick,
 	StrategyDecision,
 )
+from app.engine.graph_builder import MAX_PIT_STOPS as MAX_STOPS_PER_RACE
+from app.engine.graph_builder import MIN_LAPS_BETWEEN_STOPS as MIN_STINT_LAPS
 from app.simulation.projection import (
 	FRESH_TYRE_AGE,
+	MAX_TYRE_LIFE_LAPS,
 	ProjectedCarState,
 	build_pace_model,
 	elapsed_time_at,
@@ -326,7 +329,11 @@ class SimulationEngine:
 		p1_model, p2_model = self._pace_models()
 		if not self._projection_cache:
 			self._projection_cache[fork_lap] = self._fork_state()
-			self._plan_state = {"action": self.user_action, "pit_due": fork_lap if self.user_action == "PIT" else None}
+			self._plan_state = {
+				"action": self.user_action,
+				"pit_due": fork_lap if self.user_action == "PIT" else None,
+				"user_pit": self.user_action == "PIT",
+			}
 
 		start_lap = max(self._projection_cache)
 		p1_state, p2_state = self._projection_cache[start_lap]
@@ -346,17 +353,30 @@ class SimulationEngine:
 				end_lap=self.end_lap,
 				shock_event=shock,
 				context=self._baseline_ctx(),
+				stops_made=len(p1_state.pit_laps),
 			)
 			p1_pits = opponent_call.action == "PIT"
 
+			our_stops = len(p2_state.pit_laps)
 			our_pits = self._plan_state["pit_due"] == current_lap
-			if not our_pits and self._is_review_lap(current_lap):
+			# A set at the end of its life is changed whatever the strategist or the
+			# engine would prefer - no car finishes a race distance on one set.
+			if p2_state.tyre_age >= MAX_TYRE_LIFE_LAPS and our_stops < MAX_STOPS_PER_RACE:
+				our_pits = True
+			elif our_pits and not self._plan_state.get("user_pit"):
+				# Engine-initiated stops respect the minimum stint and the allocation.
+				if our_stops >= MAX_STOPS_PER_RACE or p2_state.tyre_age < MIN_STINT_LAPS:
+					our_pits = False
+			elif our_pits and our_stops >= MAX_STOPS_PER_RACE:
+				# Even a committed call cannot exceed the tyre sets a race affords.
+				our_pits = False
+			if not our_pits and self._is_review_lap(current_lap) and our_stops < MAX_STOPS_PER_RACE:
 				# A recommendation whose optimal path contains a stop is not a
 				# recommendation to stop *now*: the engine also returns the lap that
 				# stop is due. Acting on the action alone made the car dive into the
 				# pits at every review, a stop every few laps.
 				call = self._pitsense_decision(p2_sim, p1_sim, current_lap)
-				if call.action == "PIT":
+				if call.action == "PIT" and p2_state.tyre_age >= MIN_STINT_LAPS:
 					self._plan_state["pit_due"] = max(current_lap, call.target_lap)
 					our_pits = self._plan_state["pit_due"] == current_lap
 
@@ -374,6 +394,7 @@ class SimulationEngine:
 			)
 			if our_pits:
 				self._plan_state["pit_due"] = None
+				self._plan_state["user_pit"] = False
 			rank_by_race_time((p1_state, p2_state))
 			self._projection_cache[current_lap + 1] = (p1_state, p2_state)
 
@@ -654,7 +675,14 @@ class SimulationEngine:
 			}
 
 		self.user_action = action
-		self._plan_state = {"action": action, "pit_due": lap if action == "PIT" else None}
+		# A stop the strategist asks for explicitly is theirs to call: a real team can
+		# pit whenever it wants. The minimum-stint rule below constrains what the
+		# *engine* proposes, not what a human commits to.
+		self._plan_state = {
+			"action": action,
+			"pit_due": lap if action == "PIT" else None,
+			"user_pit": action == "PIT",
+		}
 		self.decision_history.append(DecisionRecord(lap=lap, action=action))
 		if self.scenario_id == "historical":
 			self.scenario_id = f"decision-{uuid4().hex[:8]}"
