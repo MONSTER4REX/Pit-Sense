@@ -123,6 +123,19 @@ energy-store, or ERS channel. Per PRD §5.K, **no energy UI was built.**
 - **Live telemetry.** Historical replay only, and the UI says so in its
   provenance panel.
 
+## Race rules the engine enforces
+
+- **Two dry compounds in a dry race.** The sporting regulations require it, so a
+  car that has used only one has no legal zero-stop finish and the engine will
+  not offer one. If too few laps remain to fit a stop, that shortfall is reported
+  rather than papered over. The rule is correctly *not* applied to a wet race -
+  which is why 2024 Canada and 2023 Netherlands, both run on intermediates, can
+  legitimately show no stop call.
+- **Tyre wear always costs more as a set ages.** The per-lap charge rises with
+  tyre age under an absolute ceiling. An earlier version held the charge at the
+  oldest age observed before the fork, which let a fifty-lap-old set cost exactly
+  what a sixteen-lap-old one did and made never stopping free.
+
 ## Known limitations, stated plainly
 
 1. **Projected margins compound a per-lap pace difference.** Two cars' measured
@@ -131,15 +144,21 @@ energy-store, or ERS channel. Per PRD §5.K, **no energy UI was built.**
    The delta is capped at 0.25s/lap for the projection and **the cap is printed in
    the assumption trail** whenever it binds. The projected *position* is more
    trustworthy than the projected *margin*.
-2. **Degradation is unmeasurable on some races**, Canada 2024 most clearly. The
+2. **The strategist's committed decision holds only until the next scheduled
+   review.** Between reviews the car follows it; at a review the engine
+   re-optimises and its own call takes effect unless the strategist commits a
+   new one. That is the "rolling re-optimisation" PRD §5.H asks for, but it does
+   mean a STAY OUT chosen at one review can be followed by an engine-initiated
+   stop a few laps later.
+3. **Degradation is unmeasurable on some races**, Canada 2024 most clearly. The
    engine reports the factor as not measured, widens the confidence band, and
    names the gap in its reasoning rather than substituting a plausible rate.
-3. **Track position is lap-resolution.** The source data supports discrete per-lap
+4. **Track position is lap-resolution.** The source data supports discrete per-lap
    positions, so the track shows discrete movement. No sub-lap interpolation is
    invented.
-4. **The opponent baseline is a comparator, not a claim** about what the real team
+5. **The opponent baseline is a comparator, not a claim** about what the real team
    would have decided. Its assumptions travel with every projection it produces.
-5. **Three constants bound the strategy search, and each is a modelling choice
+6. **Three constants bound the strategy search, and each is a modelling choice
    rather than a measurement.** They are named here so they can be argued with:
    a stop is only offered once a set has run 8 laps; a race is capped at 3 stops
    (tyre allocation and pit-lane loss make more than that unrealistic); and a

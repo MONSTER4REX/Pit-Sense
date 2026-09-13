@@ -49,6 +49,10 @@ NEUTRALISED_PIT_LANE_LOSS_SECONDS = 12.0
 RAIN_DEGRADATION_MULTIPLIER = 1.6
 # A fresh set starts at age 1 on the lap after the stop.
 FRESH_TYRE_AGE = 1
+# Absolute ceiling on the per-lap time a worn tyre can cost, matching the strategy
+# graph's. It bounds a steep fitted rate without ever letting an older tyre cost
+# less than a younger one.
+MAX_DEGRADATION_PENALTY_SECONDS = 8.0
 
 
 @dataclass(frozen=True)
@@ -345,17 +349,14 @@ def project_lap_time(
 	lap_time = model.reference_lap_seconds
 	if model.degradation_seconds_per_lap is not None:
 		multiplier = RAIN_DEGRADATION_MULTIPLIER if shock_event == "rain" else 1.0
-		# The rate was fitted over a stint of finite length. Applying it to tyre
-		# ages past that is extrapolating a straight line beyond the data that
-		# produced it, and over a race distance that compounds into lap times no
-		# car ever ran - a 40-lap-old tyre projected ten seconds off the pace. The
-		# charge is therefore held at the oldest age actually observed, which is
-		# also closer to the truth: real tyres plateau rather than degrading
-		# linearly forever, which is why teams stop before that point.
-		effective_age = tyre_age
-		if model.max_fitted_tyre_age is not None:
-			effective_age = min(tyre_age, model.max_fitted_tyre_age)
-		lap_time += model.degradation_seconds_per_lap * effective_age * multiplier
+		# An old tyre must never stop costing more than a younger one. Holding the
+		# charge at the oldest age observed made a fifty-lap-old set cost exactly
+		# what a sixteen-lap-old one did, which let a car run a whole race without
+		# stopping and pay nothing for it. The charge therefore keeps rising with
+		# age, under an absolute ceiling that stops a steep fitted rate producing
+		# lap times no car has ever run.
+		penalty = model.degradation_seconds_per_lap * tyre_age * multiplier
+		lap_time += min(penalty, MAX_DEGRADATION_PENALTY_SECONDS)
 	if pitting:
 		lap_time += (
 			NEUTRALISED_PIT_LANE_LOSS_SECONDS

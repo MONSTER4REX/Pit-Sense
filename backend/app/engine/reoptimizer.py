@@ -23,6 +23,9 @@ from app.explainability.factor_breakdown import explain_path
 from app.explainability.reasoning import describe_recommendation
 from app.rival_model.cover_stop import cover_stop_probability
 from app.schemas.recommendation import StrategyRecommendation
+DRY_COMPOUNDS = {"SOFT", "MEDIUM", "HARD"}
+WET_COMPOUNDS = {"INTERMEDIATE", "WET"}
+
 from app.tyre_model.active import (
 	active_model_selection,
 	degradation_rate_or_none,
@@ -67,6 +70,21 @@ def optimize_strategy(
 		fuel_note = normalisation_note(**stint_history)
 	degradation_rate = degradation_rate_or_none(fit)
 
+	# The sporting regulations require two different dry compounds in a dry race,
+	# so a car that has run only one so far has no legal way to finish without
+	# stopping. Without this the engine would happily recommend staying out for a
+	# whole race - and on a circuit where wear is hard to measure, that is exactly
+	# what it did.
+	dry_compounds_used = {
+		str(compound).upper()
+		for compound in stint_compounds
+		if compound and str(compound).upper() in DRY_COMPOUNDS
+	}
+	wet_running = any(
+		compound and str(compound).upper() in WET_COMPOUNDS for compound in stint_compounds
+	) or "rain" in {event.lower() for event in uncertainty_events}
+	required_stops = 1 if (len(dry_compounds_used) < 2 and not wet_running) else 0
+
 	# 2. Build and solve the graph.
 	build = build_strategy_graph(
 		start_lap=start_lap,
@@ -80,7 +98,17 @@ def optimize_strategy(
 		pit_lane_loss_seconds=pit_lane_loss_seconds,
 	)
 	start = next(node for node in build.edges if node.lap == start_lap)
-	total, path = shortest_path(start, build.edges, end_lap)
+	mandatory_stop_infeasible = False
+	try:
+		total, path = shortest_path(start, build.edges, end_lap, min_stops=required_stops)
+	except ValueError:
+		if not required_stops:
+			raise
+		# There are not enough laps left to fit a legal stop - late in a race, or
+		# in a short window. The unconstrained path is returned and the shortfall
+		# is reported rather than the engine pretending the rule is satisfied.
+		mandatory_stop_infeasible = True
+		total, path = shortest_path(start, build.edges, end_lap)
 
 	pit_edge = next((edge for edge in path if edge.action == "pit_now"), None)
 	action = "pit_now" if pit_edge else "stay_out"
@@ -107,6 +135,16 @@ def optimize_strategy(
 	notes = list(build.notes)
 	if fuel_note and degradation_rate is not None:
 		notes.append(fuel_note)
+	if required_stops and not mandatory_stop_infeasible:
+		notes.append(
+			"Only one dry compound has been used, so the two-compound rule requires "
+			"a stop; a no-stop finish is not a legal option and is not offered."
+		)
+	if mandatory_stop_infeasible:
+		notes.append(
+			"Only one dry compound has been used, but too few laps remain to fit a "
+			"stop, so no legal two-compound path exists from here."
+		)
 	if not rival_measured:
 		notes.append(
 			"The rival has no recorded pit stops yet this session, so cover-stop "

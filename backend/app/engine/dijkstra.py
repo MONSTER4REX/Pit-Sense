@@ -10,7 +10,14 @@ def shortest_path(
     start: StrategyNode,
     graph: dict[StrategyNode, list[StrategyEdge]],
     goal_lap: int,
+    min_stops: int = 0,
 ) -> tuple[float, list[StrategyEdge]]:
+    """Cheapest path to the goal lap, optionally requiring a minimum stop count.
+
+    ``min_stops`` carries the two-compound rule: a dry race the car has not yet
+    made a compound change in has no legal zero-stop finish, so a path that never
+    stops must not be offered as the cheapest one.
+    """
     queue: list[tuple[float, int, StrategyNode]] = [(0.0, 0, start)]
     distances: dict[StrategyNode, float] = {start: 0.0}
     previous: dict[StrategyNode, tuple[StrategyNode, StrategyEdge]] = {}
@@ -20,7 +27,7 @@ def shortest_path(
         distance, _, node = heapq.heappop(queue)
         if distance != distances.get(node):
             continue
-        if node.lap == goal_lap:
+        if node.lap == goal_lap and node.stops >= min_stops:
             goal = node
             break
         for edge in graph.get(node, []):
