@@ -89,7 +89,7 @@ export default function SimulationDecisionPanel() {
 							<div className="decision-call">{actionLabel(recommendation.action)}</div>
 							<div className="decision-detail">
 								<span>Target lap</span>
-								<strong>{recommendation.pit_lap}</strong>
+								<strong>{recommendation.pit_lap ?? "no stop on this path"}</strong>
 							</div>
 							<div className="decision-detail">
 								<span>Confidence</span>
@@ -109,7 +109,7 @@ export default function SimulationDecisionPanel() {
 							<div className="decision-call">{actionLabel(baseline.action)}</div>
 							<div className="decision-detail">
 								<span>Target lap</span>
-								<strong>{baseline.target_lap}</strong>
+								<strong>{baseline.target_lap ?? "no stop on this path"}</strong>
 							</div>
 							<div className="decision-detail">
 								<span>Projected cost</span>

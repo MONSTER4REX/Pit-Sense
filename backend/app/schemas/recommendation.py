@@ -36,7 +36,10 @@ class StrategyRecommendation(BaseModel):
 	model_config = ConfigDict(extra="forbid")
 
 	action: Literal["pit_now", "stay_out", "extend_stint"]
-	pit_lap: int = Field(ge=1)
+	# The lap the optimal path stops on, or None when it contains no stop. This is
+	# deliberately nullable: it previously carried the final lap of the race as a
+	# sentinel, which the UI then displayed as a recommendation to act on that lap.
+	pit_lap: Optional[int] = Field(default=None, ge=1)
 	projected_total_time_seconds: float = Field(gt=0)
 	undercut_risk_tier: Literal["safe", "marginal", "optimal", "critical"] = "safe"
 	explainability: ExplainabilityBreakdown

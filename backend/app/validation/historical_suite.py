@@ -46,7 +46,7 @@ MIN_DIRECTIONAL_TOLERANCE_LAPS = 2
 class LapSample:
 	lap: int
 	action: str
-	pit_lap: int
+	pit_lap: int | None
 	confidence_lower: float
 	confidence_upper: float
 	tyre_delta_risk: float

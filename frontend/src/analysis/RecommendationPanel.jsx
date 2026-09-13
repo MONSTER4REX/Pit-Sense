@@ -22,14 +22,16 @@ export default function RecommendationPanel() {
 	}
 
 	const { action, pit_lap, undercut_risk_tier, confidence, reasoning } = recommendation;
-	const isPit = action === "pit_now";
+	// A path with no stop on it has no pit lap. It used to report the final lap of
+	// the race, which read as an instruction to act on that lap.
+	const callDetail = pit_lap == null ? "NO STOP ON THIS PATH" : `TARGET LAP ${pit_lap}`;
 	const riskTone = undercut_risk_tier === "critical" ? "critical" : "neutral";
 
 	return (
 		<Panel label="PITSENSE RECOMMENDATION" tone="historical" className="recommendation-panel">
 			<div className="recommendation-call">
 				<span className="call-action">{actionLabel(action)}</span>
-				<span className="call-lap">{isPit ? `TARGET LAP ${pit_lap}` : `REVIEW AT LAP ${pit_lap}`}</span>
+				<span className="call-lap">{callDetail}</span>
 			</div>
 
 			{recommendationPending && <Note>Recomputing for lap {currentLap}…</Note>}

@@ -33,7 +33,7 @@ class StrategyDecision(BaseModel):
 	car: CarRole
 	lap: int = Field(ge=1)
 	action: SimulationAction
-	target_lap: int = Field(ge=1)
+	target_lap: int | None = Field(default=None, ge=1)
 	confidence: float | None = Field(default=None, ge=0, le=1)
 	projected_time_cost: float = Field(ge=0)
 	projected_position: int = Field(ge=1)

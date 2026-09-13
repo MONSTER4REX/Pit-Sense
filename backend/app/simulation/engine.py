@@ -377,7 +377,8 @@ class SimulationEngine:
 				# pits at every review, a stop every few laps.
 				call = self._pitsense_decision(p2_sim, p1_sim, current_lap)
 				if call.action == "PIT" and p2_state.tyre_age >= MIN_STINT_LAPS:
-					self._plan_state["pit_due"] = max(current_lap, call.target_lap)
+					target = call.target_lap if call.target_lap is not None else current_lap
+					self._plan_state["pit_due"] = max(current_lap, target)
 					our_pits = self._plan_state["pit_due"] == current_lap
 
 			p1_state = self._advance(

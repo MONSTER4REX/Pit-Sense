@@ -18,7 +18,7 @@ LIKELY_COVER_PROBABILITY = 0.5
 def describe_recommendation(
 	*,
 	action: str,
-	pit_lap: int,
+	pit_lap: int | None,
 	start_lap: int,
 	explainability: ExplainabilityBreakdown,
 	confidence: ConfidenceBand,
@@ -27,15 +27,25 @@ def describe_recommendation(
 
 	if action == "pit_now":
 		lead = (
-			f"The shortest projected race-time path stops on lap {pit_lap}"
-			if pit_lap != start_lap
-			else "The shortest projected race-time path stops now"
+			"The shortest projected race-time path stops now"
+			if pit_lap is None or pit_lap == start_lap
+			else f"The shortest projected race-time path stops on lap {pit_lap}"
 		)
 		parts.append(
 			f"{lead}, paying {explainability.pit_lane_time_loss:.1f}s of pit-lane loss"
 			+ (
 				f" plus {explainability.traffic_rejoin_risk:.1f}s of projected rejoin traffic"
 				if explainability.traffic_rejoin_risk > 0
+				else ""
+			)
+			+ "."
+		)
+	elif pit_lap is None:
+		parts.append(
+			"The shortest projected race-time path runs to the flag with no further stop"
+			+ (
+				f", carrying {explainability.tyre_delta_risk:.1f}s of accumulated tyre degradation"
+				if explainability.tyre_delta_risk > 0
 				else ""
 			)
 			+ "."

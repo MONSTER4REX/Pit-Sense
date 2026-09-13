@@ -112,7 +112,7 @@ def optimize_strategy(
 
 	pit_edge = next((edge for edge in path if edge.action == "pit_now"), None)
 	action = "pit_now" if pit_edge else "stay_out"
-	pit_lap = pit_edge.source.lap if pit_edge else end_lap
+	pit_lap = pit_edge.source.lap if pit_edge else None
 
 	# 3. Rival cover-stop probability from the rival's own recorded behaviour.
 	if rival_cover_stop_probability is not None:
@@ -122,7 +122,9 @@ def optimize_strategy(
 		rival_cover = cover_stop_probability(
 			rival_tyre_age=rival_tyre_age if rival_tyre_age is not None else current_tyre_age,
 			observed_response_laps=list(rival_pit_laps),
-			pit_window_lap=pit_lap,
+			# With no stop on the path, the rival's response is judged against the
+			# end of the race rather than against a stop we are not making.
+			pit_window_lap=pit_lap if pit_lap is not None else end_lap,
 		)
 		rival_measured = True
 	else:
