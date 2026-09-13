@@ -1,4 +1,6 @@
 import { Note, Panel, StatusBadge } from "../shared/primitives";
+import PlaybackControls from "../shared/PlaybackControls";
+import { usePlayback } from "../shared/usePlayback";
 import { seconds } from "../shared/format";
 import { useRaceAnalysis } from "./RaceAnalysisProvider";
 
@@ -13,26 +15,20 @@ export default function AnalysisTimeline() {
 	const { session, currentLap, setCurrentLap, totalLaps, timelineEvents, lapState } =
 		useRaceAnalysis();
 
+	// Race Analysis drives its own playback; the Lab has a separate instance.
+	const playback = usePlayback({ currentLap, totalLaps, setLap: setCurrentLap });
 	const pitStops = session?.p2_pit_stops ?? [];
 	const events = (timelineEvents ?? []).filter((event) => event.lap_number <= currentLap);
 
 	return (
 		<Panel label="RACE CONTEXT & REPLAY" tone="historical" className="timeline-panel">
-			<div className="lap-scrubber">
-				<label htmlFor="analysis-lap">Lap</label>
-				<input
-					id="analysis-lap"
-					type="range"
-					min={1}
-					max={Math.max(1, totalLaps)}
-					value={currentLap}
-					disabled={!totalLaps}
-					onChange={(event) => setCurrentLap(Number(event.target.value))}
-				/>
-				<output>
-					{currentLap} / {totalLaps || "—"}
-				</output>
-			</div>
+			<PlaybackControls
+				{...playback}
+				currentLap={currentLap}
+				totalLaps={totalLaps}
+				setLap={setCurrentLap}
+				tone="historical"
+			/>
 
 			{/* Real recorded pit stops, marked where they actually happened. */}
 			<div className="stint-strip" aria-label="Recorded pit stops for our car">

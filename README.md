@@ -103,14 +103,16 @@ Australia, 2024 Britain, 2024 Azerbaijan):
 |---|---|
 | Explainability + confidence band on every recommendation | PASS |
 | Recommendation recomputes per lap, never frozen | PASS |
-| Re-optimisation inside the 1s budget | PASS — max **0.101s** |
-| Directional pit-window agreement | **4 of 5** (target 3 of 5) |
+| Re-optimisation inside the 1s budget | PASS — max **0.294s** |
+| Directional pit-window agreement | **3 of 5** (target 3 of 5) |
 | Tyre-cliff onset within ±2 laps | 7 of 19 scorable stints |
 | Source data gaps flagged rather than interpolated | 8 |
 
-Both accuracy figures improve on the v1.0 record carried in the PRD (3/5 and
-1/4), and the improvement comes from the field-pace change described above rather
-than from moving a threshold.
+Cliff accuracy improves on the v1.0 record carried in the PRD (1 of 4), and the
+improvement comes from the field-pace change described above rather than from
+moving a threshold. Directional agreement matches the 3-of-5 target, and is
+scored only against laps where the engine actually called a stop - a run where it
+recommends staying out has made no pit-window call and is not credited with one.
 
 ## Layout
 

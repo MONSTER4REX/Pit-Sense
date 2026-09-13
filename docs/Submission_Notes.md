@@ -30,7 +30,7 @@ assumption trail.
 | Explainability breakdown on 100% of recommendations | PASS |
 | Confidence band on 100% of recommendations | PASS |
 | Recommendation recomputes per lap (not frozen) | PASS |
-| Re-optimisation within the 1s budget | PASS — max measured **0.101s** |
+| Re-optimisation within the 1s budget | PASS — max measured **0.294s** |
 | Two-tier availability metadata correct for all 5 races | PASS |
 | Opponent post-fork path driven by a stated baseline model | PASS |
 
@@ -38,15 +38,25 @@ assumption trail.
 
 | Criterion | Target | Result |
 |---|---|---|
-| Directional pit-window agreement | ≥3 of 5 | **4 of 5** |
+| Directional pit-window agreement | ≥3 of 5 | **3 of 5** |
 | Tyre-cliff prediction within ±2 laps | reported | **7 of 19** scorable stints |
 | Safety car / VSC evidence | reported | 4 of 5 races |
 | Wet / intermediate evidence | reported | 5 of 5 races |
 | Source data gaps flagged (not interpolated) | reported | 8 |
 
-Both figures improve on the v1.0 record carried in PRD §13.1 (3/5 directional,
-1/4 cliff), and the improvement is attributable to a specific modelling change
-described below rather than to threshold tuning.
+Cliff accuracy improves on the v1.0 record carried in PRD §13.1 (1 of 4), through
+the modelling change described below rather than threshold tuning. Directional
+agreement meets its target.
+
+**A correction to how directional agreement is scored.** An earlier run of this
+suite reported 4 of 5. That figure was inflated by a measurement bug: when the
+engine recommends staying out it reports `pit_lap` as the final lap of the race,
+a sentinel meaning "no stop on this path". The suite was comparing that sentinel
+against the team's real stops, so a race could score a match purely because the
+end of the race happened to fall near a late pit stop - which is what 2023
+Netherlands was doing. The suite now scores only laps where the engine actually
+called a stop. The lower figure is the more honest one, and it is reported here
+rather than quietly replaced.
 
 ## The tyre-cliff limitation, and what fixed part of it
 
@@ -62,7 +72,7 @@ Fuel burn and track evolution share one property that makes them separable: they
 act on **every car on track at the same lap**, while tyre age does not. So wear is
 now measured as each car's pace relative to the field's median lap for that lap
 number (`app/tyre_model/field_pace.py`). That is what moved cliff detection from
-1/4 to 7/19 and directional agreement from 3/5 to 4/5.
+1 of 4 to 7 of 19.
 
 It does not fix everything. Canada 2024 still yields no measurable degradation
 for our car, and is kept in the validated set as the honest limitation case.
@@ -129,6 +139,16 @@ energy-store, or ERS channel. Per PRD §5.K, **no energy UI was built.**
    invented.
 4. **The opponent baseline is a comparator, not a claim** about what the real team
    would have decided. Its assumptions travel with every projection it produces.
+5. **Three constants bound the strategy search, and each is a modelling choice
+   rather than a measurement.** They are named here so they can be argued with:
+   a stop is only offered once a set has run 8 laps; a race is capped at 3 stops
+   (tyre allocation and pit-lane loss make more than that unrealistic); and a
+   fitted degradation rate above 0.25s per lap of tyre age is rejected as
+   unmeasurable. That last ceiling was set against the rates this model actually
+   produces on the five races — median 0.073s/lap, with a tail to 0.46s/lap on
+   wet and drying stints — keeping the real aggressive-compound range and
+   rejecting the tail. Without these bounds the engine proposed four- and
+   five-stop strategies that no team would run.
 
 ## Reproducing everything
 

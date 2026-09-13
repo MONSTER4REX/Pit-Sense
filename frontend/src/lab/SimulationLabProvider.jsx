@@ -17,6 +17,7 @@ import {
 	fetchCounterfactualSummary,
 	fetchRecommendation,
 	fetchSimulationAssumptions,
+	fetchSimulationTick,
 	fetchTimeline,
 	fetchWhatIf,
 	injectSimulationShock,
@@ -53,6 +54,9 @@ export function SimulationLabProvider({ children }) {
 
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState(null);
+	// True when a scheduled strategy review falls due on the lap being viewed, so
+	// the decision panel can offer the strategist a fresh call (PRD 5.H / 9.1).
+	const [isReviewLap, setReviewLap] = useState(false);
 
 	const requestRef = useRef(0);
 	const totalLaps = session?.total_laps ?? 0;
@@ -68,6 +72,7 @@ export function SimulationLabProvider({ children }) {
 		setSummary(null);
 		setAssumptions([]);
 		setCurrentLap(1);
+		setReviewLap(false);
 		setError(null);
 	}, []);
 
@@ -135,6 +140,30 @@ export function SimulationLabProvider({ children }) {
 			});
 		return () => controller.abort();
 	}, [selectedRace, geometryVerified]);
+
+	/* After the fork, follow the projected branch: every lap has its own state,
+	 * its own re-optimisation and its own pit phases. Without this the whole
+	 * projected phase rendered the fork lap's tick forever, so the run looked
+	 * like nothing happened - no stops, no re-optimisations, nothing moving. */
+	useEffect(() => {
+		if (!session || !totalLaps || phase !== PHASES.PROJECTED) return undefined;
+		const controller = new AbortController();
+		const requestId = ++requestRef.current;
+
+		fetchSimulationTick(Math.min(currentLap, totalLaps), controller.signal)
+			.then((tick) => {
+				if (requestId !== requestRef.current) return;
+				recordProjectedTick(tick);
+				setReviewLap(Boolean(tick.is_review_lap));
+				// Branches computed from the projected state for this same lap, so
+				// the panel's heading and its numbers always refer to one lap.
+				if (tick.what_if) setWhatIf(tick.what_if);
+			})
+			.catch((cause) => {
+				if (cause.name !== "AbortError") setError(cause.message);
+			});
+		return () => controller.abort();
+	}, [session, currentLap, totalLaps, phase]);
 
 	/* Historical phase only: the engine's live call for the lap being viewed.
 	 * After the fork the projected ticks carry their own recommendation, and a
@@ -207,10 +236,17 @@ export function SimulationLabProvider({ children }) {
 				const response = await acceptSimulationDecision(action, currentLap);
 				if (!response.tick) throw new Error("The backend returned no projected tick");
 
-				setForkLap(currentLap);
+				// The first decision is the fork. Later ones change the plan inside
+				// the branch that already exists, so the fork lap stays where it was.
+				setForkLap((existing) => existing ?? currentLap);
 				setCommittedAction(action);
 				setPhase(PHASES.PROJECTED);
-				setProjectedTicks([response.tick]);
+				// Everything after this lap was projected under the old plan and is
+				// now wrong, so it is dropped rather than left on screen.
+				setProjectedTicks((current) => [
+					...current.filter((tick) => tick.lap < currentLap),
+					response.tick,
+				]);
 
 				const [finalSummary, stated] = await Promise.all([
 					fetchCounterfactualSummary(),
@@ -264,6 +300,7 @@ export function SimulationLabProvider({ children }) {
 			committedAction,
 			shock,
 			reoptimizationStatus,
+			isReviewLap,
 			recommendation: activeRecommendation,
 			whatIf,
 			projectedTicks,
@@ -293,6 +330,7 @@ export function SimulationLabProvider({ children }) {
 			committedAction,
 			shock,
 			reoptimizationStatus,
+			isReviewLap,
 			activeRecommendation,
 			whatIf,
 			projectedTicks,

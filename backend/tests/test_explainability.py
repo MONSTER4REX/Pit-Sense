@@ -50,7 +50,10 @@ def test_unmeasured_factors_are_flagged_and_widen_confidence() -> None:
 		"rival_cover_stop": False,
 	}
 	assert bare.explainability.notes
-	assert all(measured.explainability.measured.values())
+	# The stint rises 0.10s/lap before the fuel correction adds its share back, so
+	# the rate the model measures is the tyre's, not the raw lap-time slope.
+	assert all(measured.explainability.measured.values()), measured.explainability.measured
+	assert measured.degradation_rate_seconds_per_lap is not None
 
 	bare_width = bare.confidence.upper - bare.confidence.lower
 	measured_width = measured.confidence.upper - measured.confidence.lower

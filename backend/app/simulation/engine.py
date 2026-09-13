@@ -20,8 +20,10 @@ from uuid import uuid4
 
 from app.engine.baseline import BaselineContext, baseline_decision
 from app.engine.reoptimizer import optimize_strategy
+from app.whatif.simulator import compare_branches
 from app.replay.shock_events import ShockEventType
 from app.schemas.race_state import RaceState
+from app.schemas.recommendation import StrategyRecommendation
 from app.schemas.simulation import (
 	CarSimulationState,
 	CounterfactualSummary,
@@ -46,6 +48,13 @@ from app.simulation.projection import (
 GAP_CHANGE_THRESHOLD_SECONDS = 1.0
 # Laps between scheduled strategy reviews after the fork (PRD 5.H).
 SCHEDULED_REVIEW_INTERVAL_LAPS = 5
+# How long an injected shock keeps affecting the race. A safety car or VSC is
+# withdrawn after a few laps; leaving it active for the rest of the race made the
+# field permanently neutralised, so the opponent took a "cheap stop" every few
+# laps for the remainder of the projection.
+SHOCK_DURATION_LAPS = {"safety_car": 4, "vsc": 3, "puncture": 1}
+# Rain is the exception: once it is wet, it stays wet for the projection.
+RAIN_LASTS_TO_THE_FLAG = True
 
 _ACTION_FROM_RECOMMENDATION = {"pit_now": "PIT", "stay_out": "STAY_OUT", "extend_stint": "EXTEND"}
 
@@ -75,6 +84,7 @@ class SimulationEngine:
 		self._p2_model = None
 		self._baseline_context: BaselineContext | None = None
 		self._pace_cap_note: str | None = None
+		self._plan_state: dict[str, object] = {"action": None, "pit_due": None}
 
 	@property
 	def end_lap(self) -> int:
@@ -139,7 +149,7 @@ class SimulationEngine:
 			current_compound=ours.compound or "UNKNOWN",
 			current_tyre_age=ours.tyre_age,
 			lap_time_seconds=lap_times or [90.0, 90.0],
-			uncertainty_events=(self.shock_event.value,) if self.shock_event else (),
+			uncertainty_events=(active,) if (active := self._shock_active_at(lap)) else (),
 			rival_pit_laps=rival_pit_laps,
 			rival_tyre_age=rival.tyre_age,
 			cars_ahead_gaps_seconds=self._gaps_ahead(ours, rival),
@@ -160,11 +170,26 @@ class SimulationEngine:
 			recommendation=recommendation,
 		)
 
+	def _shock_active_at(self, lap: int) -> str | None:
+		"""The shock affecting this lap, or None once it has been withdrawn.
+
+		A safety car is not a permanent change to the race. Treating it as one made
+		the field neutralised to the flag, which handed the opponent a cheap stop
+		every few laps for the rest of the projection.
+		"""
+		if self.shock_event is None or self.shock_lap is None or lap < self.shock_lap:
+			return None
+		value = self.shock_event.value
+		if value == "rain" and RAIN_LASTS_TO_THE_FLAG:
+			return value
+		duration = SHOCK_DURATION_LAPS.get(value, 1)
+		return value if lap < self.shock_lap + duration else None
+
 	def _opponent_decision(self, opponent: CarSimulationState) -> StrategyDecision:
 		return baseline_decision(
 			car=opponent,
 			end_lap=self.end_lap,
-			shock_event=self.shock_event.value if self.shock_event else None,
+			shock_event=self._shock_active_at(opponent.lap),
 			context=self._baseline_ctx(),
 		)
 
@@ -281,29 +306,41 @@ class SimulationEngine:
 		return "HARD" if (current or "").upper() in {"SOFT", "MEDIUM"} else "MEDIUM"
 
 	def _project_to(self, lap: int) -> tuple[ProjectedCarState, ProjectedCarState]:
-		"""Deterministically propagate both cars from the fork to the given lap."""
+		"""Propagate both cars from the fork to the given lap.
+
+		The walk is resumed from the furthest lap already computed, never restarted
+		from the fork. Restarting would replace the cached state objects for every
+		earlier lap with fresh ones, discarding the pit phases marked on them - so a
+		car would appear to leave the pit lane on a lap it was never seen entering,
+		which is the teleport the PRD forbids.
+		"""
 		fork_lap = self.fork_lap
 		assert fork_lap is not None
-		if lap in self._projection_cache:
+		# Only serve from cache once the walk has gone *past* this lap, because a
+		# lap's own pit decision is made while processing it. Returning a lap the
+		# walk merely reached would hand back a state whose stop had not yet been
+		# decided, and the pit entry would never be seen.
+		if lap in self._projection_cache and max(self._projection_cache) > lap:
 			return self._projection_cache[lap]
 
 		p1_model, p2_model = self._pace_models()
-		shock = self.shock_event.value if self.shock_event else None
-		p1_state, p2_state = self._fork_state()
-		self._projection_cache[fork_lap] = (p1_state, p2_state)
-		# Always resolve at least one lap past the fork, so a stop committed on the
-		# fork lap is marked on that lap regardless of which lap is asked for first.
-		target = max(lap, min(fork_lap + 1, self.end_lap))
+		if not self._projection_cache:
+			self._projection_cache[fork_lap] = self._fork_state()
+			self._plan_state = {"action": self.user_action, "pit_due": fork_lap if self.user_action == "PIT" else None}
 
-		# Our car's committed action at the fork; re-optimisation may change it
-		# later, and each change is logged as its own computation.
-		our_plan = self.user_action
-		our_pit_due = fork_lap if our_plan == "PIT" else None
-		if our_plan == "EXTEND":
-			our_pit_due = None
+		start_lap = max(self._projection_cache)
+		p1_state, p2_state = self._projection_cache[start_lap]
+		# Build one lap past the one being asked for. A car's stop is decided while
+		# processing the lap it happens on, so stopping the walk *at* that lap would
+		# return it before its own decision had been made - the viewer would see the
+		# car on track, then see it rejoining the next lap, never entering.
+		target = max(lap + 1, fork_lap + 1)
 
-		for current_lap in range(fork_lap, target):
+		for current_lap in range(start_lap, target):
+			shock = self._shock_active_at(current_lap)
 			p1_sim = self._as_sim_state(p1_state)
+			p2_sim = self._as_sim_state(p2_state)
+
 			opponent_call = baseline_decision(
 				car=p1_sim,
 				end_lap=self.end_lap,
@@ -312,14 +349,16 @@ class SimulationEngine:
 			)
 			p1_pits = opponent_call.action == "PIT"
 
-			our_pits = our_pit_due == current_lap
-			if not our_pits and our_plan in {"STAY_OUT", "EXTEND", None}:
-				# Our car re-evaluates at each scheduled review; a stop it decides
-				# on there is taken on that lap.
-				p2_sim = self._as_sim_state(p2_state)
-				if self._is_review_lap(current_lap):
-					call = self._pitsense_decision(p2_sim, p1_sim, current_lap)
-					our_pits = call.action == "PIT"
+			our_pits = self._plan_state["pit_due"] == current_lap
+			if not our_pits and self._is_review_lap(current_lap):
+				# A recommendation whose optimal path contains a stop is not a
+				# recommendation to stop *now*: the engine also returns the lap that
+				# stop is due. Acting on the action alone made the car dive into the
+				# pits at every review, a stop every few laps.
+				call = self._pitsense_decision(p2_sim, p1_sim, current_lap)
+				if call.action == "PIT":
+					self._plan_state["pit_due"] = max(current_lap, call.target_lap)
+					our_pits = self._plan_state["pit_due"] == current_lap
 
 			p1_state = self._advance(
 				p1_state,
@@ -334,12 +373,48 @@ class SimulationEngine:
 				new_compound=self._replacement_compound(p2_state.compound, shock),
 			)
 			if our_pits:
-				our_pit_due = None
-				our_plan = "STAY_OUT"
+				self._plan_state["pit_due"] = None
 			rank_by_race_time((p1_state, p2_state))
 			self._projection_cache[current_lap + 1] = (p1_state, p2_state)
 
 		return self._projection_cache[lap]
+
+	def projected_what_if(self, lap: int) -> dict[str, StrategyRecommendation]:
+		"""Pit / stay out / extend, computed from the *projected* car state.
+
+		The historical what-if endpoint answers from the recorded race, which after
+		the fork is no longer where our car is. Showing those branches against a
+		projected lap would label one lap's numbers with another lap's heading.
+		"""
+		if self.fork_lap is None:
+			raise ValueError("A decision must be accepted before a projected what-if exists")
+
+		p1_state, p2_state = self._project_to(lap)
+		ours = self._as_sim_state(p2_state)
+		rival = self._as_sim_state(p1_state)
+		lap_times = [row.lap_time_seconds for row in self.p2.laps if row.lap_time_seconds is not None]
+
+		return compare_branches(
+			current_lap=lap,
+			end_lap=max(lap + 1, self.end_lap),
+			current_compound=ours.compound or "UNKNOWN",
+			current_tyre_age=ours.tyre_age,
+			lap_time_seconds=lap_times or [90.0, 90.0],
+			uncertainty_events=(active,) if (active := self._shock_active_at(lap)) else (),
+			rival_pit_laps=tuple(stop.lap_number for stop in self.p1.pit_stops if stop.lap_number <= lap),
+			rival_tyre_age=rival.tyre_age,
+			cars_ahead_gaps_seconds=self._gaps_ahead(ours, rival),
+			field_baseline=self.field_median_lap_times,
+			**self._stint_history(self.p2, lap),
+		)
+
+	def is_review_lap(self, lap: int) -> bool:
+		"""Whether a scheduled strategy review falls due on this lap (PRD 5.H).
+
+		Public because the API surfaces it: the UI offers the strategist a fresh
+		decision at exactly these laps.
+		"""
+		return self._is_review_lap(lap)
 
 	def _is_review_lap(self, lap: int) -> bool:
 		fork_lap = self.fork_lap or lap
@@ -549,13 +624,37 @@ class SimulationEngine:
 		return self.tick(lap)
 
 	def accept_decision(self, lap: int, action: str) -> SimulationTick:
+		"""Commit a strategy decision.
+
+		The *first* decision is the fork: it is where the run leaves the historical
+		record. Every later decision is a change of plan *inside* the projected
+		branch, not a new fork - the race has already diverged, so re-forking from
+		the recorded state at a later lap would throw away the divergence the user
+		is in the middle of exploring and quietly re-anchor them to history.
+		"""
 		if action not in {"PIT", "STAY_OUT", "EXTEND"}:
 			raise ValueError("Action must be PIT, STAY_OUT, or EXTEND")
-		self.fork_lap = lap
+		if lap < 1 or lap > self.end_lap:
+			raise ValueError("Decision lap must be within the loaded race")
+		if self.fork_lap is not None and lap < self.fork_lap:
+			raise ValueError("A decision cannot be committed before the fork lap")
+
+		if self.fork_lap is None:
+			self.fork_lap = lap
+			self._projection_cache.clear()
+			self._p1_model = self._p2_model = self._baseline_context = None
+			self._pace_cap_note = None
+		else:
+			# Keep the branch *before* this lap and recompute from it. Keeping the
+			# decision lap itself would keep a state already carrying the previous
+			# plan's pit marking, so switching PIT to STAY_OUT would leave a phantom
+			# stop on the lap the user just changed their mind about.
+			self._projection_cache = {
+				cached: state for cached, state in self._projection_cache.items() if cached < lap
+			}
+
 		self.user_action = action
-		self._projection_cache.clear()
-		self._p1_model = self._p2_model = self._baseline_context = None
-		self._pace_cap_note = None
+		self._plan_state = {"action": action, "pit_due": lap if action == "PIT" else None}
 		self.decision_history.append(DecisionRecord(lap=lap, action=action))
 		if self.scenario_id == "historical":
 			self.scenario_id = f"decision-{uuid4().hex[:8]}"

@@ -1,4 +1,6 @@
 import { Note, Panel, StatusBadge } from "../shared/primitives";
+import PlaybackControls from "../shared/PlaybackControls";
+import { usePlayback } from "../shared/usePlayback";
 import { PHASES, useSimulationLab } from "./SimulationLabProvider";
 
 /*
@@ -11,6 +13,9 @@ import { PHASES, useSimulationLab } from "./SimulationLabProvider";
 export default function SimulationTimeline() {
 	const { totalLaps, currentLap, setCurrentLap, forkLap, shock, phase, projectedTicks, session } =
 		useSimulationLab();
+
+	// The Lab drives its own playback, separate from Race Analysis's.
+	const playback = usePlayback({ currentLap, totalLaps, setLap: setCurrentLap });
 
 	if (!totalLaps) return null;
 	const projected = phase === PHASES.PROJECTED;
@@ -81,18 +86,13 @@ export default function SimulationTimeline() {
 			</div>
 
 			<div className="timeline-controls">
-				<label htmlFor="lab-lap">Lap</label>
-				<input
-					id="lab-lap"
-					type="range"
-					min={1}
-					max={totalLaps}
-					value={currentLap}
-					onChange={(event) => setCurrentLap(Number(event.target.value))}
+				<PlaybackControls
+					{...playback}
+					currentLap={currentLap}
+					totalLaps={totalLaps}
+					setLap={setCurrentLap}
+					tone={projected ? "projected" : "historical"}
 				/>
-				<output>
-					{currentLap} / {totalLaps}
-				</output>
 				<StatusBadge tone={projected ? "projected" : "historical"}>
 					{projected ? "PROJECTED" : "HISTORICAL"}
 				</StatusBadge>

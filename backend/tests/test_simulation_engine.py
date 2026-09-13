@@ -67,7 +67,12 @@ def test_counterfactual_reoptimizes_at_next_review_lap() -> None:
 	assert review.mode == "PROJECTED"
 	assert review.next_review_lap is not None
 	assert [record.lap for record in engine.decision_history] == [2, 4]
-	assert second.decision_lap == 4
+	# The fork stays where the run first left the historical record. A later
+	# decision changes the plan inside the projected branch; it does not re-anchor
+	# the branch to the recorded state at a later lap.
+	assert second.decision_lap == 2
+	assert engine.fork_lap == 2
+	assert second.mode == "PROJECTED"
 
 
 def test_pit_status_uses_historical_and_projected_lap_phases() -> None:

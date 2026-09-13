@@ -11,13 +11,7 @@
         26,
         47
       ],
-      "recommended_pit_laps": [
-        70,
-        70,
-        70,
-        70,
-        70
-      ],
+      "recommended_pit_laps": [],
       "directionally_consistent": false,
       "lap_samples": [
         {
@@ -81,13 +75,16 @@
       "confidence_on_every_recommendation": true,
       "cliff_predictions": 5,
       "cliff_within_tolerance": 2,
-      "max_reoptimization_seconds": 0.09951,
+      "max_reoptimization_seconds": 0.2233,
       "reoptimization_within_budget": true,
       "shock_events_tested": 3,
       "safety_car_or_vsc_evidence": true,
       "wet_or_intermediate_evidence": true,
       "data_gap_count": 1,
-      "notes": []
+      "notes": [
+        "The engine recommended staying out at every sampled lap, so it made no pit-window call to compare against the team's.",
+        "No recorded pit stop for our car, so directional agreement is not scorable."
+      ]
     },
     {
       "year": 2023,
@@ -102,14 +99,8 @@
         61,
         64
       ],
-      "recommended_pit_laps": [
-        72,
-        72,
-        72,
-        72,
-        72
-      ],
-      "directionally_consistent": true,
+      "recommended_pit_laps": [],
+      "directionally_consistent": false,
       "lap_samples": [
         {
           "lap": 10,
@@ -172,13 +163,16 @@
       "confidence_on_every_recommendation": true,
       "cliff_predictions": 3,
       "cliff_within_tolerance": 2,
-      "max_reoptimization_seconds": 0.10119,
+      "max_reoptimization_seconds": 0.2939,
       "reoptimization_within_budget": true,
       "shock_events_tested": 3,
       "safety_car_or_vsc_evidence": true,
       "wet_or_intermediate_evidence": true,
       "data_gap_count": 3,
-      "notes": []
+      "notes": [
+        "The engine recommended staying out at every sampled lap, so it made no pit-window call to compare against the team's.",
+        "No recorded pit stop for our car, so directional agreement is not scorable."
+      ]
     },
     {
       "year": 2024,
@@ -193,9 +187,7 @@
       "recommended_pit_laps": [
         15,
         25,
-        31,
-        58,
-        58
+        31
       ],
       "directionally_consistent": true,
       "lap_samples": [
@@ -260,7 +252,7 @@
       "confidence_on_every_recommendation": true,
       "cliff_predictions": 4,
       "cliff_within_tolerance": 2,
-      "max_reoptimization_seconds": 0.04855,
+      "max_reoptimization_seconds": 0.09686,
       "reoptimization_within_budget": true,
       "shock_events_tested": 3,
       "safety_car_or_vsc_evidence": true,
@@ -280,10 +272,7 @@
       ],
       "recommended_pit_laps": [
         17,
-        26,
-        52,
-        52,
-        52
+        26
       ],
       "directionally_consistent": true,
       "lap_samples": [
@@ -337,7 +326,7 @@
           "pit_lap": 52,
           "confidence_lower": 0.78,
           "confidence_upper": 0.86,
-          "tyre_delta_risk": 17.42,
+          "tyre_delta_risk": 4.6,
           "degradation_measured": true,
           "has_explainability": true,
           "has_reasoning": true
@@ -348,7 +337,7 @@
       "confidence_on_every_recommendation": true,
       "cliff_predictions": 3,
       "cliff_within_tolerance": 0,
-      "max_reoptimization_seconds": 0.03495,
+      "max_reoptimization_seconds": 0.06818,
       "reoptimization_within_budget": true,
       "shock_events_tested": 3,
       "safety_car_or_vsc_evidence": false,
@@ -435,7 +424,7 @@
       "confidence_on_every_recommendation": true,
       "cliff_predictions": 4,
       "cliff_within_tolerance": 1,
-      "max_reoptimization_seconds": 0.03218,
+      "max_reoptimization_seconds": 0.10168,
       "reoptimization_within_budget": true,
       "shock_events_tested": 3,
       "safety_car_or_vsc_evidence": true,
@@ -448,10 +437,10 @@
     "explainability_on_every_recommendation": true,
     "confidence_on_every_recommendation": true,
     "recommendation_updates_per_lap": true,
-    "max_reoptimization_seconds": 0.10119,
-    "mean_reoptimization_seconds": 0.06328,
+    "max_reoptimization_seconds": 0.2939,
+    "mean_reoptimization_seconds": 0.15678,
     "reoptimization_within_budget": true,
-    "directional_agreement": "4/5",
+    "directional_agreement": "3/5",
     "directional_target_met": true,
     "cliff_predictions_scored": 19,
     "cliff_within_two_laps": 7,

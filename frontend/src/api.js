@@ -51,6 +51,9 @@ export const injectSimulationShock = (eventType, lap, signal) =>
 export const acceptSimulationDecision = (action, lap, signal) =>
 	postJson("/api/simulation/decision", { action, lap }, signal);
 
+export const fetchSimulationTick = (lap, signal) =>
+	getJson(`/api/simulation/tick?lap=${lap}`, signal);
+
 export const fetchCounterfactualSummary = (signal) =>
 	getJson("/api/simulation/counterfactual", signal);
 

@@ -243,6 +243,31 @@ def simulation_decision(request: DecisionRequest) -> dict[str, object]:
 	return {"accepted": True, "fork_updated": True, "tick": result.model_dump(mode="json")}
 
 
+@app.get("/api/simulation/tick")
+def simulation_tick(lap: int = Query(ge=1)) -> dict[str, object]:
+	"""The simulation's state at one lap.
+
+	Before the fork this is the recorded race; after it, the projected branch.
+	The frontend asks for a lap and renders what comes back, so scrubbing and
+	playback follow the projection rather than showing the fork's state forever.
+	"""
+	engine = _require_simulation()
+	if lap > engine.end_lap:
+		raise HTTPException(status_code=422, detail=f"Lap {lap} is beyond this race's {engine.end_lap} laps")
+	tick = engine.tick(lap)
+	payload = tick.model_dump(mode="json")
+	payload["fork_lap"] = engine.fork_lap
+	payload["is_review_lap"] = engine.fork_lap is not None and engine.is_review_lap(lap)
+	if engine.fork_lap is not None and lap >= engine.fork_lap:
+		# Branches computed from the projected state, so the numbers on screen
+		# belong to the lap the heading names.
+		payload["what_if"] = {
+			name: branch.model_dump(mode="json")
+			for name, branch in engine.projected_what_if(lap).items()
+		}
+	return payload
+
+
 @app.get("/api/simulation/counterfactual")
 def counterfactual_summary() -> dict[str, object]:
 	engine = _require_simulation()

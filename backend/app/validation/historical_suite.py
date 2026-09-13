@@ -142,7 +142,12 @@ def validate_race(year: int, event: str, *, cache_dir: str | None = None) -> Rac
 			stint_lap_times=tuple(context["stint_lap_times"]),
 			field_baseline=context["field_baseline"],
 		)
-		recommended.append(recommendation.pit_lap)
+		# Only a genuine stop call is a pit-window recommendation. When the engine
+		# says stay out it reports pit_lap as the end of the race, which is a
+		# sentinel meaning "no stop on this path" - scoring that against a real
+		# stop would credit or blame the engine for a call it never made.
+		if recommendation.action == "pit_now":
+			recommended.append(recommendation.pit_lap)
 		result.lap_samples.append(
 			LapSample(
 				lap=lap,
@@ -194,6 +199,11 @@ def validate_race(year: int, event: str, *, cache_dir: str | None = None) -> Rac
 	tolerance = max(
 		MIN_DIRECTIONAL_TOLERANCE_LAPS, int(engine.end_lap * DIRECTIONAL_TOLERANCE_FRACTION)
 	)
+	if not recommended:
+		result.notes.append(
+			"The engine recommended staying out at every sampled lap, so it made no "
+			"pit-window call to compare against the team's."
+		)
 	if actual_pits and recommended:
 		result.directionally_consistent = any(
 			abs(suggested - actual) <= tolerance

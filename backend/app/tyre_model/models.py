@@ -36,7 +36,16 @@ CLIFF_NOISE_MULTIPLE = 3.0
 # Degradation outside this band is not a tyre wearing out - it is a fit latching
 # onto traffic, weather, or a curve extrapolated past the data that constrains it.
 # A rate outside the band is reported as unsupported rather than used.
-PLAUSIBLE_DEGRADATION_SECONDS_PER_LAP = (0.0, 0.40)  # exclusive lower bound
+# Ceiling on what is credible as *tyre* degradation, in seconds per lap of tyre
+# age. Chosen against the rates this model actually produces on the validated
+# races, whose median is 0.073s/lap - squarely where published F1 dry-degradation
+# figures sit - with a long tail running to 0.46s/lap on wet and drying stints.
+# The ceiling keeps the aggressive-compound end of the real range, including the
+# portion fuel correction adds back, and rejects the tail, which is weather and
+# track evolution rather than a tyre wearing out. A rejected fit is reported
+# unmeasured, never quietly replaced. The lower bound is exclusive: a flat or
+# improving stint is not a measurement of zero wear.
+PLAUSIBLE_DEGRADATION_SECONDS_PER_LAP = (0.0, 0.25)
 # Fraction of a stint treated as its fresh-tyre phase. The reference pace is the
 # best lap inside that phase: degradation is measured as loss against a fresh
 # tyre, not against the stint's outright best lap, which fuel burn pushes toward

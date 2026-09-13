@@ -33,6 +33,7 @@ export default function SimulationDecisionPanel() {
 		injectShock,
 		commitDecision,
 		committedAction,
+		isReviewLap,
 		busy,
 		geometryVerified,
 	} = useSimulationLab();
@@ -122,21 +123,29 @@ export default function SimulationDecisionPanel() {
 				</div>
 			</section>
 
+			{/* After the fork the strategist is not locked out: at every scheduled
+			    review the engine produces a fresh recommendation, and a fresh
+			    recommendation you cannot act on is just a notification (PRD 5.H). */}
 			<section className="your-decision">
-				<div className="panel-label">YOUR DECISION</div>
-				{projected ? (
+				<div className="panel-label">
+					{projected ? "CHANGE THE PLAN" : "YOUR DECISION"}
+				</div>
+
+				{projected && !isReviewLap && (
 					<Note>
-						Committed to {actionLabel(committedAction)} at the fork. Reset the run to explore a
-						different decision.
+						Committed to {actionLabel(committedAction)}. The engine re-optimises on its own at
+						each scheduled review — play on to the next one to change the call.
 					</Note>
-				) : (
+				)}
+
+				{(!projected || isReviewLap) && (
 					<>
 						<div className="decision-buttons">
 							{DECISIONS.map((option) => (
 								<Button
 									key={option.id}
 									variant="commit"
-									disabled={busy || !shock || !geometryVerified}
+									disabled={busy || (!projected && !shock) || !geometryVerified}
 									onClick={() => commitDecision(option.id)}
 								>
 									{option.label}
@@ -146,9 +155,11 @@ export default function SimulationDecisionPanel() {
 						<Note>
 							{!geometryVerified
 								? "This race has no verified geometry, so the counterfactual run is disabled for it."
-								: shock
-									? "Committing a decision forks the simulation into a projected counterfactual."
-									: "Inject a shock first — the counterfactual starts from a changed race."}
+								: projected
+									? `Strategy review due at lap ${currentLap}. Committing here changes the plan from this lap on; the fork stays where it was.`
+									: shock
+										? "Committing a decision forks the simulation into a projected counterfactual."
+										: "Inject a shock first — the counterfactual starts from a changed race."}
 						</Note>
 					</>
 				)}
