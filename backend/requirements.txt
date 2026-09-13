@@ -2,5 +2,8 @@ fastf1>=3.5,<4
 fastapi>=0.115,<1
 numpy>=1.26,<3
 pydantic>=2.7,<3
+# ASGI server for app.main:app. The [standard] extra pulls in the websockets
+# implementation the /ws/replay tick stream needs.
+uvicorn[standard]>=0.27,<1
 pytest>=8,<9
 pytest-asyncio>=0.23,<1
